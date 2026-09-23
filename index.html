@@ -214,6 +214,34 @@ label.req span::after{content:" *";color:var(--late)}
 .plist div{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center}
 .plist b{font-variant-numeric:tabular-nums}
 @media (max-width:520px){.pie{grid-template-columns:1fr;justify-items:center}.plist{width:100%}.vc,.vx{gap:6px}}
+.viewsw{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.viewsw button{border:0;background:var(--surface);color:var(--muted);padding:7px 12px;font-size:13px;font-weight:600}
+.viewsw button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.stickers{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+.stk{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.stk.late{border-color:var(--late);box-shadow:0 0 0 1px var(--late) inset}
+.stk .sh{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;background:var(--surface-2);border-bottom:1px dashed var(--line)}
+.stk .plate{font:700 19px/1 var(--f-mono);letter-spacing:.08em;background:#111;color:#fff;border:2px solid #111;outline:2px solid #fff;outline-offset:-5px;padding:8px 12px 7px;border-radius:5px;white-space:nowrap}
+.stk .unit{font-size:12.5px;color:var(--muted);text-align:right}
+.stk .who{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 12px;padding:10px 14px;font-size:13.5px;border-bottom:1px dashed var(--line)}
+.stk .who dt{color:var(--muted)}.stk .who dd{margin:0;font-weight:500}
+.stk .parts{display:grid;padding:4px 0}
+.stk .pr{display:grid;grid-template-columns:22px 1fr auto;gap:2px 8px;padding:8px 14px;text-align:left;background:none;border:0;color:inherit;width:100%;cursor:pointer;align-items:start}
+.stk .pr:hover{background:var(--surface-2)}
+.stk .pr .nb{font:600 12px/1.6 var(--f-mono);color:var(--muted)}
+.stk .pr .nm{font-weight:600}
+.stk .pr .mt{grid-column:2/-1;font-size:12px;color:var(--muted)}
+.stk .pr .rt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+.stk .pr.done .nm{text-decoration:line-through;color:var(--muted)}
+.stk .sf{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;border-top:1px dashed var(--line);flex-wrap:wrap}
+.stk .sf .tt{font:700 20px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.stk .sf .sdl{font-size:12.5px;flex:1 1 200px;min-width:0}
+.stk .acts{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 12px}
+.stk .acts .btn{padding:6px 10px;font-size:12.5px}
+.gl{display:grid;gap:6px}
+.gl label{display:flex;flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:13.5px}
+.gl input[type=checkbox]{width:18px;height:18px;flex:none}
+@media (max-width:420px){.stickers{grid-template-columns:1fr}}
 .tip{position:fixed;z-index:40;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:7px 10px;border-radius:6px;box-shadow:var(--shadow);max-width:240px}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.kpis .kpi:first-child{grid-column:1/-1}.panels{grid-template-columns:1fr}}
 @media (max-width:520px){.fun .row{grid-template-columns:1fr 90px}.fun .row .tr{grid-column:1/-1;grid-row:2}.sal .row{grid-template-columns:1fr 80px}.sal .row .stack{grid-column:1/-1;grid-row:2}}
@@ -275,8 +303,10 @@ label.req span::after{content:" *";color:var(--late)}
 
   <div class="toolbar">
     <div class="chips" role="group" aria-label="Filter status" id="chips"></div>
-    <input class="search" id="q" type="search" placeholder="Cari nopol, pelanggan, part…">
+    <div style="display:flex;gap:8px;flex:1 1 260px;justify-content:flex-end;flex-wrap:wrap"><div class="viewsw" id="vsw" role="group" aria-label="Tampilan"><button type="button" data-v="stiker">Stiker per Nopol</button><button type="button" data-v="tabel">Tabel</button></div>
+    <input class="search" id="q" type="search" placeholder="Cari nopol, nama, No. HP, part…"></div>
   </div>
+  <div class="stickers" id="stk"></div>
 
   <div class="tablebox" id="tbox">
     <table>
@@ -400,6 +430,9 @@ function render(){
   if(sa){const names=[...new Set(base().map(r=>r.sa).filter(Boolean))];
     $("#board").innerHTML=`<div class="bhead"><h2>SA ${esc(names.length===1?names[0]:saQ.trim())}</h2><span class="muted">Semua data di bawah hanya untuk SA ini · <button type="button" class="btn" id="saClr2" style="padding:4px 10px">Tampilkan semua SA</button></span></div>`;
     $("#saClr2").onclick=()=>$("#saClr").click();}
+  const st=viewMode!=="tabel";$("#stk").hidden=!st;$("#tbox").hidden=st;$("#cards").hidden=st;
+  $("#vsw").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===(st?"stiker":"tabel")));
+  if(st)renderStickers(v);
   $("#tbody").innerHTML=v.map(r=>`<tr tabindex="0" data-id="${esc(r.id)}">
     <td class="mono">${esc(r.no)}${ex(r)}</td>
     <td class="muted" style="white-space:nowrap">${fmtD(r.tgl)}</td>
@@ -565,6 +598,88 @@ function askDelete(r){
   $("#bNo").onclick=()=>openDetail(r.id);
   $("#bYes").onclick=async()=>{try{await col.doc(r.id).delete();closeDrawer();toast("CR7 dihapus")}catch(e){toast("Gagal menghapus")}};
 }
+
+/* ===== Stiker per plat nopol ===== */
+let viewMode="stiker";try{viewMode=localStorage.getItem("cr7-view")||"stiker"}catch(e){}
+const gkey=r=>normNopol(r.nopol)||("tanpa-nopol:"+(r.pelanggan||r.id));
+function groupsOf(list){
+  const m=new Map();list.forEach(r=>{const k=gkey(r);if(!m.has(k))m.set(k,[]);m.get(k).push(r)});
+  const G=[...m].map(([k,l])=>{
+    l.sort((a,b)=>(active(b)-active(a))||String(a.target||"9").localeCompare(String(b.target||"9")));
+    const act=l.filter(active),pick=f=>{const x=l.find(r=>r[f]);return x?x[f]:""};
+    const tgt=act.map(r=>r.target).filter(Boolean).sort()[0]||"";
+    return {k,list:l,act,nopol:pick("nopol"),nama:pick("pelanggan"),hp:pick("kontak"),sa:pick("sa"),unit:pick("unit"),tgl:l.map(r=>r.tgl).filter(Boolean).sort()[0]||"",
+      target:tgt,late:act.some(isLate),total:act.reduce((a,r)=>a+total(r),0),all:l.reduce((a,r)=>a+total(r),0)};
+  });
+  return G.sort((a,b)=>(b.late-a.late)||((b.act.length>0)-(a.act.length>0))||String(a.target||"9").localeCompare(String(b.target||"9")));
+}
+function sisaTgt(t){if(!t)return"tanpa deadline";return sisa({status:"Open",target:t})}
+function stickerHTML(g,noActs){
+  return `<article class="stk ${g.late?"late":""}" data-g="${esc(g.k)}"${noActs?' style="box-shadow:none"':""}>
+   <div class="sh"><span class="plate">${esc(g.nopol||"TANPA NOPOL")}</span><span class="unit">${esc(g.unit||"")}${g.tgl?`<br>Servis ${fmtD(g.tgl)}`:""}</span></div>
+   <dl class="who"><dt>Nama</dt><dd>${esc(g.nama)||"—"}</dd><dt>No. HP</dt><dd class="mono">${esc(g.hp)||"—"}</dd><dt>SA</dt><dd>${esc(g.sa)||"—"}</dd></dl>
+   <div class="parts">${g.list.map((r,i)=>`<button type="button" class="pr ${active(r)?"":"done"}" data-id="${esc(r.id)}">
+      <span class="nb">${i+1}.</span><span class="nm">${esc(r.partNama)} <span class="muted" style="font-weight:500">× ${esc(r.qty)}</span>${ex(r)}</span>
+      <span class="rt">${rp(total(r))}</span>
+      <span class="mt">${[r.lokasi?`Lokasi: ${esc(r.lokasi)}`:"",r.jasa?`jasa ${rp(r.jasa)}`:"",r.catatan?esc(r.catatan):""].filter(Boolean).join(" · ")}${r.catatan||r.lokasi||r.jasa?" · ":""}<span class="pill ${sc(r.status)}" style="font-size:11px;padding:1px 7px">${esc(r.status)}</span> ${active(r)?`<span style="${isLate(r)?"color:var(--late);font-weight:600":""}">${fmtD(r.target)} · ${sisa(r)}</span>`:""}</span>
+    </button>`).join("")}</div>
+   <div class="sf"><span class="sdl">${g.act.length?`<b>${g.act.length}</b> part belum diganti · deadline <b style="${g.late?"color:var(--late)":""}">${fmtD(g.target)}</b> <span class="muted">(${sisaTgt(g.target)})</span>`:`<span class="pill s-Selesai">Semua selesai</span>`}</span><span class="tt">${rp(g.act.length?g.total:g.all)}</span></div>
+   ${noActs?"":`<div class="acts">${canWrite&&g.act.length?`<button class="btn primary" type="button" data-act="fu">Follow up stiker</button>`:""}${canWrite?`<button class="btn" type="button" data-act="add">+ Part</button>`:""}<button class="btn" type="button" data-act="copy">Salin teks</button></div>`}
+  </article>`;
+}
+function stickerText(g){
+  const L=[`CR7 – ${g.nopol||"-"}${g.unit?` (${g.unit})`:""}`,`Nama   : ${g.nama||"-"}`,`No. HP : ${g.hp||"-"}`,`SA     : ${g.sa||"-"}`,``,`Sparepart yang harus diganti:`];
+  (g.act.length?g.act:g.list).forEach((r,i)=>L.push(`${i+1}. ${r.partNama} x${r.qty} – ${rp(total(r))}${r.lokasi?` (${r.lokasi})`:""}${r.catatan?` – ${r.catatan}`:""}`));
+  L.push(``,`Total  : ${rp(g.act.length?g.total:g.all)}`);if(g.target)L.push(`Deadline: ${fmtD(g.target)}`);
+  return L.join("\n");
+}
+let lastGroups=[];
+function renderStickers(v){
+  lastGroups=groupsOf(v);
+  $("#stk").innerHTML=lastGroups.length?lastGroups.map(g=>stickerHTML(g)).join(""):`<div class="empty" style="grid-column:1/-1">${rows.length?"Tidak ada CR7 yang cocok dengan filter ini.":"Belum ada CR7. Klik “Foto → CR7” atau “Isi Manual”."}</div>`;
+}
+function openGroupFU(g){
+  current=null;$("#dTitle").textContent="Follow up "+(g.nopol||"");
+  $("#dBody").innerHTML=`${stickerHTML(g,true)}
+   <fieldset><legend>Part yang di-follow up</legend><div class="gl">${g.act.map(r=>`<label><input type="checkbox" data-id="${esc(r.id)}" checked> ${esc(r.partNama)} × ${esc(r.qty)} <span class="pill ${sc(r.status)}" style="font-size:11px">${esc(r.status)}</span></label>`).join("")}</div></fieldset>
+   <fieldset><legend>Hasil follow up</legend><div class="grid2">
+     <label><span>Status baru</span><select id="g_st">${STATUSES.map(s=>`<option ${s==="Follow Up"?"selected":""}>${s}</option>`).join("")}</select></label>
+     <label><span>Deadline berikutnya</span><input id="g_tgt" type="date" value="${esc(g.target)}"></label></div>
+     <label><span>Catatan follow up</span><textarea id="g_note" placeholder="mis. Pelanggan dihubungi via WA, janji datang Sabtu"></textarea></label>
+     <p class="small muted" style="margin:0">Pilih <b>Selesai</b> bila pelanggan datang & part sudah diganti, <b>Batal</b> bila pelanggan menolak / tidak datang.</p>
+     <p class="err" id="g_err" hidden></p></fieldset>`;
+  $("#dBody").querySelectorAll(".pr").forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
+  $("#dFoot").innerHTML=`<button class="btn" type="button" id="g_cancel">Batal</button><button class="btn primary" type="button" id="g_save">Simpan follow up</button>`;
+  $("#g_cancel").onclick=closeDrawer;
+  $("#g_save").onclick=async()=>{
+    const ids=[...$("#dBody").querySelectorAll(".gl input:checked")].map(x=>x.dataset.id);
+    const st=$("#g_st").value,tgt=$("#g_tgt").value,note=$("#g_note").value.trim(),err=$("#g_err");
+    if(!ids.length){err.textContent="Centang minimal satu part.";err.hidden=false;return}
+    const b=$("#g_save");b.disabled=true;b.textContent="Menyimpan…";let ok=0;
+    try{for(const id of ids){const r=rows.find(x=>x.id===id);if(!r)continue;const now=new Date().toISOString();
+        let n=note||(st!==r.status?`Status diubah ke ${st}.`:"Follow up.");if(tgt&&tgt!==r.target)n+=` Deadline baru ${fmtD(tgt)}.`;
+        await col.doc(id).update({status:st,target:tgt||r.target||"",log:[...(r.log||[]),{t:now,s:st,note:n}],updatedAt:now});ok++}
+      closeDrawer();toast(`${ok} part di-follow up`)}
+    catch(e){b.disabled=false;b.textContent="Coba lagi";err.textContent=`${ok?ok+" part tersimpan, sisanya gagal. ":""}Gagal menyimpan: ${e.message||e.code||""}`;err.hidden=false}
+  };
+  openDrawer();
+}
+function addPartTo(g){
+  openNew();
+  const set=(id,v)=>{const el=$("#"+id);if(el&&v)el.value=v};
+  set("f_sa",g.sa);set("f_nopol",g.nopol);set("f_unit",g.unit);set("f_pel",g.nama);set("f_kontak",g.hp);set("f_tgt",g.target);
+  $("#dTitle").textContent="Tambah part · "+(g.nopol||"");$("#f_pnm").focus();
+}
+$("#stk").addEventListener("click",async e=>{
+  const p=e.target.closest(".pr");if(p){openDetail(p.dataset.id);return}
+  const a=e.target.closest("[data-act]");if(!a)return;const g=lastGroups.find(x=>x.k===a.closest(".stk").dataset.g);if(!g)return;
+  if(a.dataset.act==="fu")openGroupFU(g);
+  else if(a.dataset.act==="add")addPartTo(g);
+  else if(a.dataset.act==="copy"){const t=stickerText(g);try{await navigator.clipboard.writeText(t);toast("Teks stiker disalin — tinggal tempel di WhatsApp")}catch(_){
+    current=null;$("#dTitle").textContent="Salin teks";$("#dBody").innerHTML=`<textarea id="cpt" style="min-height:260px">${esc(t)}</textarea>`;$("#dFoot").innerHTML=`<button class="btn" type="button" onclick="document.getElementById('btnClose').click()">Tutup</button>`;openDrawer();$("#cpt").select()}}
+});
+function setView(m){viewMode=m;try{localStorage.setItem("cr7-view",m)}catch(e){}render()}
+$("#vsw").addEventListener("click",e=>{const b=e.target.closest("button[data-v]");if(b)setView(b.dataset.v)});
 
 /* ===== Laporan ===== */
 const CAT=[{k:"ok",n:"Berhasil datang",c:"var(--c-ok)",t:"#fff"},{k:"fu",n:"Proses follow up",c:"var(--c-fu)",t:"#1a1400"},{k:"new",n:"Belum di-follow up",c:"var(--c-new)",t:"#fff"},{k:"bad",n:"Gagal / tidak datang",c:"var(--c-bad)",t:"#fff"}];
