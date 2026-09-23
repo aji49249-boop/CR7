@@ -521,21 +521,26 @@ function validate(d){
   return miss.length?"Lengkapi dulu: "+miss.join(", ")+".":"";
 }
 
+let pendingNewId=null;
 function openNew(){
+  pendingNewId=newId();
   current=null;$("#dTitle").textContent="Tambah CR7";
   $("#dBody").innerHTML=formHTML();bindTotal();
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="bCancel">Batal</button><button class="btn primary" type="button" id="bSave">Simpan CR7</button>`;
   $("#bCancel").onclick=closeDrawer;$("#bSave").onclick=saveNew;openDrawer();$("#f_sa").focus();
 }
+function newId(){return "r"+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function genNo(){const d=today().replace(/-/g,"").slice(2);const r=Math.random().toString(36).slice(2,6).toUpperCase();return `CR7-${d}-${r}`}
 async function saveNew(){
+  if(saveNew.busy)return;
   const d=readForm(),err=validate(d);if(err){$("#f_err").textContent=err;$("#f_err").hidden=false;return}
   if(!col){toast("Penyimpanan belum siap");return}
   const btn=$("#bSave");btn.disabled=true;btn.textContent="Menyimpan…";
   const now=new Date().toISOString();
   const doc={...d,no:genNo(),status:"Open",log:[{t:now,s:"Open",note:"CR7 dibuat. Alasan: "+d.alasan}],createdAt:now,updatedAt:now};
-  try{await col.doc().set(doc);closeDrawer();toast("CR7 tersimpan");}
-  catch(e){btn.disabled=false;btn.textContent="Simpan CR7";$("#f_err").textContent=e?.code==="invalid_argument"?"Anda tidak punya akses untuk menambah data.":e?.code==="quota_exceeded"?"Kapasitas data penuh. Hapus CR7 lama yang sudah selesai.":"Gagal menyimpan. Coba lagi.";$("#f_err").hidden=false}
+  saveNew.busy=true;
+  try{await col.doc(pendingNewId).set(doc);pendingNewId=newId();saveNew.busy=false;closeDrawer();toast("CR7 tersimpan");}
+  catch(e){saveNew.busy=false;btn.disabled=false;btn.textContent="Simpan CR7";$("#f_err").textContent=e?.code==="invalid_argument"?"Anda tidak punya akses untuk menambah data.":e?.code==="quota_exceeded"?"Kapasitas data penuh. Hapus CR7 lama yang sudah selesai.":"Gagal menyimpan. Coba lagi.";$("#f_err").hidden=false}
 }
 
 function openDetail(id){
@@ -614,10 +619,13 @@ function groupsOf(list){
   return G.sort((a,b)=>(b.late-a.late)||((b.act.length>0)-(a.act.length>0))||String(a.target||"9").localeCompare(String(b.target||"9")));
 }
 function sisaTgt(t){if(!t)return"tanpa deadline";return sisa({status:"Open",target:t})}
+const sig=r=>[String(r.partNama||"").trim().toLowerCase(),r.qty,r.harga,r.jasa].join("|");
+function dupsOf(g){const seen=new Map(),d=[];[...g.list].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))).forEach(r=>{const k=sig(r);if(seen.has(k))d.push(r);else seen.set(k,r)});return d}
 function stickerHTML(g,noActs){
   return `<article class="stk ${g.late?"late":""}" data-g="${esc(g.k)}"${noActs?' style="box-shadow:none"':""}>
    <div class="sh"><span class="plate">${esc(g.nopol||"TANPA NOPOL")}</span><span class="unit">${esc(g.unit||"")}${g.tgl?`<br>Servis ${fmtD(g.tgl)}`:""}</span></div>
    <dl class="who"><dt>Nama</dt><dd>${esc(g.nama)||"—"}</dd><dt>No. HP</dt><dd class="mono">${esc(g.hp)||"—"}</dd><dt>SA</dt><dd>${esc(g.sa)||"—"}</dd></dl>
+   ${(()=>{const d=dupsOf(g);return d.length&&!noActs&&canWrite?`<div class="notice" style="margin:8px 14px 0;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>${d.length} part tercatat dobel (nama, qty &amp; harga sama).</span><button class="btn" type="button" data-act="dedup" style="padding:5px 10px">Hapus yang dobel</button></div>`:""})()}
    <div class="parts">${g.list.map((r,i)=>`<button type="button" class="pr ${active(r)?"":"done"}" data-id="${esc(r.id)}">
       <span class="nb">${i+1}.</span><span class="nm">${esc(r.partNama)} <span class="muted" style="font-weight:500">× ${esc(r.qty)}</span>${ex(r)}</span>
       <span class="rt">${rp(total(r))}</span>
@@ -673,6 +681,11 @@ function addPartTo(g){
 $("#stk").addEventListener("click",async e=>{
   const p=e.target.closest(".pr");if(p){openDetail(p.dataset.id);return}
   const a=e.target.closest("[data-act]");if(!a)return;const g=lastGroups.find(x=>x.k===a.closest(".stk").dataset.g);if(!g)return;
+  if(a.dataset.act==="dedup"){
+    if(a.dataset.sure!=="1"){a.dataset.sure="1";a.textContent="Yakin? Tekan lagi";a.classList.add("danger");return}
+    const d=dupsOf(g);a.disabled=true;a.textContent="Menghapus…";let n=0;
+    try{for(const r of d){await col.doc(r.id).delete();n++}toast(`${n} part dobel dihapus`)}catch(e){toast("Gagal menghapus: "+(e.message||e.code||""))}
+    return}
   if(a.dataset.act==="fu")openGroupFU(g);
   else if(a.dataset.act==="add")addPartTo(g);
   else if(a.dataset.act==="copy"){const t=stickerText(g);try{await navigator.clipboard.writeText(t);toast("Teks stiker disalin — tinggal tempel di WhatsApp")}catch(_){
@@ -857,7 +870,7 @@ async function readPhoto(){
     const list=Array.isArray(res?.items)?res.items:[];
     if(!list.length){st.innerHTML=`<p class="err">Tidak ada sparepart yang terbaca di foto sparepart. Coba foto yang lebih jelas/terang.</p>`;b.disabled=false;return}
     head={tgl:today(),sa:saQ||String(res.sa||""),nopol:normNopol(String(res.nopol||"")),unit:String(res.unit||""),pelanggan:String(res.pelanggan||""),kontak:normHp(res.hp),pic:"",target:"",alasan:"Pelanggan menunda",catatan:String(res.catatan||"")};
-    items=list.map(x=>({on:true,partNo:String(x.partNo||""),partNama:String(x.partNama||""),qty:Math.max(1,Math.round(Number(x.qty)||1)),harga:Math.round(Number(x.harga)||0),jasa:Math.round(Number(x.jasa)||0),jasaKet:String(x.jasaKet||""),lokasi:String(x.lokasi||""),keterangan:String(x.keterangan||""),yakin:x.yakin!==false}));
+    items=list.map(x=>({id:newId(),on:true,partNo:String(x.partNo||""),partNama:String(x.partNama||""),qty:Math.max(1,Math.round(Number(x.qty)||1)),harga:Math.round(Number(x.harga)||0),jasa:Math.round(Number(x.jasa)||0),jasaKet:String(x.jasaKet||""),lokasi:String(x.lokasi||""),keterangan:String(x.keterangan||""),yakin:x.yakin!==false}));
     photoStep2();
   }catch(e){
     if(e?.code==="cancelled")return;
@@ -912,7 +925,7 @@ function photoStep2(){
     else if(["qty","harga","jasa"].includes(k))it[k]=Number(el.value)||0; else it[k]=el.value;
     box.querySelector("[data-t]").textContent=rp(total(it));upd();
   });
-  $("#bAddIt").onclick=()=>{syncHead();items.push({on:true,partNo:"",partNama:"",qty:1,harga:0,jasa:0,jasaKet:"",lokasi:"",keterangan:"",yakin:true});photoStep2()};
+  $("#bAddIt").onclick=()=>{syncHead();items.push({id:newId(),on:true,partNo:"",partNama:"",qty:1,harga:0,jasa:0,jasaKet:"",lokasi:"",keterangan:"",yakin:true});photoStep2()};
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="bBackPh">Foto ulang</button><button class="btn primary" type="button" id="bSaveAll"></button>`;
   $("#bBackPh").onclick=()=>{syncHead();photoStep1()};
   $("#bSaveAll").onclick=saveAll;upd();
@@ -920,21 +933,25 @@ function photoStep2(){
 function syncHead(){const g=id=>$("#"+id)?.value.trim()??"";if(!$("#h_sa"))return;
   Object.assign(head,{sa:g("h_sa"),nopol:normNopol(g("h_nopol")),unit:g("h_unit"),pelanggan:g("h_pel"),kontak:normHp(g("h_kontak")),pic:g("h_pic"),target:g("h_tgt"),tgl:g("h_tgl")||today(),alasan:g("h_alasan")})}
 async function saveAll(){
+  if(saveAll.busy)return;
   syncHead();const sel=items.filter(x=>x.on);const err=$("#h_err");
   const miss=[];if(!head.sa)miss.push("Service Advisor");if(!head.nopol)miss.push("Plat Nopol");if(!head.pelanggan)miss.push("Pelanggan");if(!head.target)miss.push("Deadline");
   if(sel.some(x=>!x.partNama.trim()))miss.push("nama part yang kosong");
   if(miss.length){err.textContent="Lengkapi dulu: "+miss.join(", ")+".";err.hidden=false;return}
-  const b=$("#bSaveAll");b.disabled=true;b.textContent="Menyimpan…";
+  const b=$("#bSaveAll");b.disabled=true;b.textContent="Menyimpan…";saveAll.busy=true;
   const now=new Date().toISOString(),grp=genNo().replace("CR7-","G-");let ok=0;
   try{
+    const batch=[];
     for(const it of sel){
+      if(!it.id)it.id=newId();
       const doc={tgl:head.tgl,sa:head.sa,nopol:head.nopol,unit:head.unit,pelanggan:head.pelanggan,kontak:head.kontak,mekanik:"",partNo:it.partNo.trim(),partNama:it.partNama.trim(),qty:it.qty||1,harga:it.harga,jasa:it.jasa,jasaKet:it.jasaKet.trim(),alasan:head.alasan,lokasi:(it.lokasi||"").trim(),catatan:(it.keterangan||"").trim(),pic:head.pic,target:head.target,
         no:genNo(),grup:grp,sumber:"foto",status:"Open",log:[{t:now,s:"Open",note:"CR7 dibuat dari foto. Alasan: "+head.alasan}],createdAt:now,updatedAt:now};
-      await col.doc().set(doc);ok++;
+      batch.push({id:it.id,data:{...doc,id:it.id}});
     }
-    photos={cust:null,part:null};items=[];closeDrawer();toast(`${ok} CR7 tersimpan`);
-  }catch(e){b.disabled=false;b.textContent="Coba simpan lagi";err.textContent=(ok?`${ok} part sudah tersimpan, sisanya gagal. `:"")+(e?.code==="invalid_argument"?"Anda tidak punya akses menambah data.":"Gagal menyimpan. Coba lagi.");err.hidden=false;
-    if(ok){const m=err.textContent;items=items.filter(x=>!x.on||sel.indexOf(x)>=ok);photoStep2();$("#h_err").textContent=m;$("#h_err").hidden=false}}
+    ok=await saveMany(batch);
+    saveAll.busy=false;photos={cust:null,part:null};items=[];closeDrawer();toast(`${ok} CR7 tersimpan`);
+  }catch(e){saveAll.busy=false;b.disabled=false;b.textContent="Coba simpan lagi";err.textContent="Gagal menyimpan: "+String(e?.message||e?.code||"").replace(/\.+$/,"")+". Tekan “Coba simpan lagi” — data tidak akan dobel.";err.hidden=false;
+  }
 }
 
 /* events */
@@ -994,6 +1011,15 @@ col={
     return()=>clearInterval(store.timer)}
 };
 db=true;
+/* simpan banyak part sekaligus; id tetap sama saat "coba lagi" sehingga tidak dobel */
+async function saveMany(batch){
+  const data=batch.map(x=>({id:x.id,data:clean(x.data)}));
+  try{await api("setMany",{items:data})}
+  catch(e){ if(!/action tidak dikenal/.test(e.message||""))throw e;
+    let n=0;for(const x of data){await api("set",{id:x.id,data:x.data});n++} }
+  data.forEach(x=>store.cache.set(x.id,x.data));store.emit();
+  return data.length;
+}
 /* baca foto lewat Apps Script → Gemini */
 async function toJpeg(blob){
   const url=URL.createObjectURL(blob);
