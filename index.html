@@ -264,7 +264,7 @@ label.req span::after{content:" *";color:var(--late)}
 @media (max-width:760px){
   .stats{grid-template-columns:repeat(2,1fr)}
   .stat.money-s{grid-column:1/-1}
-  .tablebox{display:none}
+  #tbox{display:none}
   .cards{display:grid}
   .grid3{grid-template-columns:1fr 1fr}
   .kv{grid-template-columns:110px 1fr}
@@ -498,8 +498,8 @@ const $=s=>document.querySelector(s);
 const rp=n=>"Rp "+Math.round(Number(n)||0).toLocaleString("id-ID");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
-const fmtD=s=>{if(!s)return"—";const[y,m,d]=s.split("-");const b=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];return `${+d} ${b[+m-1]} ${y}`};
-const sc=s=>"s-"+String(s).replace(/\s/g,"");
+const fmtD=s=>{if(!s)return"—";s=String(s);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return esc(s);const[y,m,d]=s.split("-");const b=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];return `${+d} ${b[+m-1]} ${y}`};
+const sc=s=>"s-"+(["Open","Follow Up","Selesai","Batal"].includes(s)?String(s).replace(/\s/g,""):"Open");
 const total=r=>(Number(r.qty)||0)*(Number(r.harga)||0)+(Number(r.jasa)||0);
 const normNopol=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
 const days=r=>{if(!r.target)return null;const a=new Date(r.target+"T00:00:00"),b=new Date(today()+"T00:00:00");return Math.round((a-b)/864e5)};
@@ -513,6 +513,7 @@ function notice(t){const el=$("#notice");el.textContent=t||"";el.hidden=!t}
 
 try{const f=localStorage.getItem("cr7-filter");if(f)filter=f}catch(e){}
 try{saQ=localStorage.getItem("cr7-sa")||""}catch(e){}
+if(saQ&&!(CONFIG.DAFTAR_SA||[]).some(n=>n.toLowerCase()===saQ.toLowerCase()))saQ="";
 
 const active=r=>r.status==="Open"||r.status==="Follow Up";
 /* Samakan nama SA dengan DAFTAR_SA: huruf besar/kecil, titik/spasi, atau nama depan saja (mis. "RUDI" → "Rudianto") */
@@ -627,7 +628,7 @@ function renderCore(){
 
 /* drawer */
 function openDrawer(){document.body.classList.add("sheet");$("#drawer").classList.remove("wide");$("#dBody").oninput=null;$("#dBody").onclick=null;$("#scrim").hidden=false;$("#drawer").hidden=false}
-function closeDrawer(){document.body.classList.remove("sheet");$("#drawer").classList.remove("wide");$("#dBody").oninput=null;$("#dBody").onclick=null;$("#scrim").hidden=true;$("#drawer").hidden=true;current=null}
+function closeDrawer(){try{ctl?.abort()}catch(e){};document.body.classList.remove("sheet");$("#drawer").classList.remove("wide");$("#dBody").oninput=null;$("#dBody").onclick=null;$("#scrim").hidden=true;$("#drawer").hidden=true;current=null}
 $("#btnClose").onclick=closeDrawer;$("#scrim").onclick=closeDrawer;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#drawer").hidden)closeDrawer()});
 
@@ -653,8 +654,8 @@ function formHTML(r){
     </div>
     <div class="grid3">
       <label class="req"><span>Qty</span><input id="f_qty" type="number" min="1" step="1" value="${o(r.qty)}" required></label>
-      <label><span>Harga part / unit (Rp)</span><input id="f_hrg" type="number" min="0" step="1000" value="${o(r.harga)}"></label>
-      <label><span>Jasa penggantian (Rp)</span><input id="f_jasa" type="number" min="0" step="1000" value="${o(r.jasa)}"></label>
+      <label><span>Harga part / unit (Rp)</span><input id="f_hrg" type="text" inputmode="numeric" autocomplete="off" value="${o(r.harga)}"></label>
+      <label><span>Jasa penggantian (Rp)</span><input id="f_jasa" type="text" inputmode="numeric" autocomplete="off" value="${o(r.jasa)}"></label>
     </div>
     <label><span>Keterangan jasa</span><input id="f_jasaket" value="${o(r.jasaKet)}" placeholder="mis. Ganti kampas rem depan, 1 jam"></label>
     <div class="total"><span class="muted">Total estimasi (part + jasa)</span><b id="f_total">${rp(total(r))}</b></div>
@@ -675,7 +676,7 @@ function formHTML(r){
 function readForm(){
   const g=id=>$("#"+id).value.trim();
   return {tgl:g("f_tgl"),sa:g("f_sa"),nopol:normNopol(g("f_nopol")),unit:g("f_unit"),pelanggan:g("f_pel"),kontak:normHp(g("f_kontak")),mekanik:g("f_mek"),
-    partNo:g("f_pno"),partNama:g("f_pnm"),qty:Number(g("f_qty"))||0,harga:Number(g("f_hrg"))||0,jasa:Number(g("f_jasa"))||0,
+    partNo:g("f_pno"),partNama:g("f_pnm"),qty:Number(g("f_qty"))||0,harga:toNum(g("f_hrg")),jasa:toNum(g("f_jasa")),
     jasaKet:g("f_jasaket"),alasan:g("f_alasan"),lokasi:g("f_lok"),catatan:g("f_cat"),pic:g("f_pic"),target:g("f_tgt")};
 }
 function bindTotal(){["f_qty","f_hrg","f_jasa"].forEach(id=>$("#"+id).addEventListener("input",()=>{$("#f_total").textContent=rp(total(readForm()))}))}
@@ -747,11 +748,11 @@ function openDetail(id){
 async function saveLog(r){
   const st=$("#u_st").value,tgt=$("#u_tgt").value,note=$("#u_note").value.trim();
   if(!note&&st===r.status&&tgt===r.target){$("#u_err").textContent="Isi hasil follow up atau ubah status.";$("#u_err").hidden=false;return}
+  $("#bLog").disabled=true;await store.refresh().catch(()=>{});const fresh=store.cache.get(r.id);if(fresh)r=fresh;
   const now=new Date().toISOString();
   let n=note||(st!==r.status?`Status diubah ke ${st}.`:"");
-  if(tgt!==r.target)n+=(n?" ":"")+`Target baru ${fmtD(tgt)}.`;
-  const log=[...(r.log||[]),{t:now,s:st,note:n}];
-  $("#bLog").disabled=true;
+  if((tgt||"")!==(r.target||""))n+=(n?" ":"")+`Target baru ${fmtD(tgt)}.`;
+  const log=[...(Array.isArray(r.log)?r.log:[]),{t:now,s:st,note:n}];
   try{await col.doc(r.id).update({status:st,target:tgt,log,updatedAt:now});toast(st==="Selesai"?"Part sudah diganti — CR7 selesai":"Follow up tercatat");openDetail(r.id)}
   catch(e){$("#bLog").disabled=false;$("#u_err").textContent="Gagal menyimpan. Coba lagi.";$("#u_err").hidden=false}
 }
@@ -772,7 +773,12 @@ function askDelete(r){
 let est=null;
 const blankP=()=>({id:newId(),nama:"",pn:"",qty:1,harga:0});
 const blankJ=()=>({id:newId(),nama:"",total:0});
-const addDays=(d,n)=>{const x=new Date((d||today())+"T00:00:00");x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+/* angka rupiah: "150.000" / "Rp 1.500.000" / 150000 / "150rb" → 150000 */
+const toNum=v=>{if(typeof v==="number")return isFinite(v)?Math.round(v):0;let t=String(v??"").toLowerCase().trim();if(!t)return 0;
+  const m=t.match(/^([\d.,]+)\s*(rb|ribu|k|jt|juta)$/);if(m){const b=parseFloat(m[1].replace(/\./g,"").replace(",","."))||0;return Math.round(b*(/j/.test(m[2])?1e6:1e3))}
+  t=t.replace(/,\d{1,2}$/,"");return Number(t.replace(/[^\d]/g,""))||0};
+const ymdL=x=>x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
+const addDays=(d,n)=>{const x=new Date((d||today())+"T00:00:00");x.setDate(x.getDate()+n);return ymdL(x)};
 function openEst(pre){
   pre=pre||{};current=null;
   est={h:{tgl:today(),sa:pre.sa||saQ||"",nama:pre.nama||"",hp:pre.hp||"",nopol:pre.nopol||"",unit:pre.unit||"",tahun:"",target:pre.target||addDays(today(),7),alasan:"Pelanggan menunda"},
@@ -781,6 +787,14 @@ function openEst(pre){
   openDrawer();$("#drawer").classList.add("wide");renderEst();
   setTimeout(()=>$(pre.nopol?'[data-p="0"][data-k="nama"]':"#e_nopol")?.focus(),50);
 }
+const estPRow=(p,i)=>`<div class="erow l"><span class="n">${i+1}</span>
+       <input class="nm" data-p="${i}" data-k="nama" value="${esc(p.nama)}" placeholder="Nama part">
+       <input class="pn" data-p="${i}" data-k="pn" value="${esc(p.pn)}" placeholder="No part">
+       ${lokSel(`class="lk" data-p="${i}" data-k="lok"`,p.lok)}
+       <input class="qt" data-p="${i}" data-k="qty" type="number" min="1" inputmode="numeric" value="${esc(p.qty)}">
+       <input class="hg" data-p="${i}" data-k="harga" type="text" inputmode="numeric" autocomplete="off" value="${p.harga||""}" placeholder="Harga">
+       <span class="tot" data-pt="${i}">${rp(p.qty*p.harga)}</span>
+       <button class="x" type="button" data-rmp="${i}" aria-label="Hapus baris">×</button></div>`;
 function renderEst(){
   const h=est.h,o=v=>esc(v??"");
   $("#dBody").innerHTML=`
@@ -797,20 +811,13 @@ function renderEst(){
    </div></fieldset>
    <fieldset><legend>Part</legend><div class="etab" id="eP">
      <div class="erow l hd"><span>No</span><span>Nama Part</span><span>No Part</span><span>Lokasi</span><span>Qty</span><span>Harga</span><span style="text-align:right">Total</span><span></span></div>
-     ${est.P.map((p,i)=>`<div class="erow l"><span class="n">${i+1}</span>
-       <input class="nm" data-p="${i}" data-k="nama" value="${o(p.nama)}" placeholder="Nama part">
-       <input class="pn" data-p="${i}" data-k="pn" value="${o(p.pn)}" placeholder="No part">
-       ${lokSel(`class="lk" data-p="${i}" data-k="lok"`,p.lok)}
-       <input class="qt" data-p="${i}" data-k="qty" type="number" min="1" inputmode="numeric" value="${o(p.qty)}">
-       <input class="hg" data-p="${i}" data-k="harga" type="number" min="0" step="1000" inputmode="numeric" value="${p.harga||""}" placeholder="Harga">
-       <span class="tot" data-pt="${i}">${rp(p.qty*p.harga)}</span>
-       <button class="x" type="button" data-rmp="${i}" aria-label="Hapus baris">×</button></div>`).join("")}
+     ${est.P.map(estPRow).join("")}
    </div><button class="btn" type="button" id="eAddP" style="justify-self:start">+ Tambah part</button></fieldset>
    <fieldset><legend>Jasa</legend><div class="etab" id="eJ">
      <div class="erow j hd"><span>No</span><span>Nama Jasa</span><span style="text-align:right">Total</span><span></span></div>
      ${est.J.map((j,i)=>`<div class="erow j"><span class="n">${i+1}</span>
        <input class="nm" data-j="${i}" data-k="nama" value="${o(j.nama)}" placeholder="mis. Jasa ganti shock depan">
-       <input class="hg" data-j="${i}" data-k="total" type="number" min="0" step="1000" inputmode="numeric" value="${j.total||""}" placeholder="Total">
+       <input class="hg" data-j="${i}" data-k="total" type="text" inputmode="numeric" autocomplete="off" value="${j.total||""}" placeholder="Total">
        <button class="x" type="button" data-rmj="${i}" aria-label="Hapus baris">×</button></div>`).join("")}
    </div><button class="btn" type="button" id="eAddJ" style="justify-self:start">+ Tambah jasa</button></fieldset>
    <div class="esum" id="eSum"></div>
@@ -820,9 +827,9 @@ function renderEst(){
     $("#eSum").innerHTML=`<div><span class="muted">Total Part</span><b>${rp(tp)}</b></div><div><span class="muted">Total Jasa</span><b>${rp(tj)}</b></div><div class="g"><span>Grand Total</span><span>${rp(tp+tj)}</span></div>`;
     const n=est.P.filter(p=>p.nama.trim()).length+est.J.filter(j=>j.nama.trim()).length;const b=$("#eSave");if(b&&!saveEst.busy){b.textContent=n?`Simpan (${est.P.filter(p=>p.nama.trim()).length} part${est.J.filter(j=>j.nama.trim()).length?`, ${est.J.filter(j=>j.nama.trim()).length} jasa`:""})`:"Simpan";b.disabled=!n}};
   $("#dBody").oninput=e=>{const t=e.target;
-    if(t.dataset.p!=null){const p=est.P[+t.dataset.p],k=t.dataset.k;p[k]=k==="qty"||k==="harga"?(Number(t.value)||0):t.value;$(`[data-pt="${t.dataset.p}"]`).textContent=rp((+p.qty||0)*(+p.harga||0));
-      if(+t.dataset.p===est.P.length-1&&k==="nama"&&t.value.trim()){sync();est.P.push(blankP());const at=document.activeElement===t;renderEst();if(at){const el=$(`[data-p="${est.P.length-2}"][data-k="nama"]`);el.focus();el.setSelectionRange(el.value.length,el.value.length)}return}}
-    else if(t.dataset.j!=null){const j=est.J[+t.dataset.j];j[t.dataset.k]=t.dataset.k==="total"?(Number(t.value)||0):t.value}
+    if(t.dataset.p!=null){const p=est.P[+t.dataset.p],k=t.dataset.k;p[k]=k==="qty"?(Number(t.value)||0):k==="harga"?toNum(t.value):t.value;$(`[data-pt="${t.dataset.p}"]`).textContent=rp((+p.qty||0)*(+p.harga||0));
+      if(+t.dataset.p===est.P.length-1&&k==="nama"&&t.value.trim()){est.P.push(blankP());$("#eP").insertAdjacentHTML("beforeend",estPRow(est.P[est.P.length-1],est.P.length-1))}}
+    else if(t.dataset.j!=null){const j=est.J[+t.dataset.j];j[t.dataset.k]=t.dataset.k==="total"?toNum(t.value):t.value}
     sum()};
   $("#dBody").onclick=e=>{const a=e.target.closest("[data-rmp],[data-rmj]");if(!a)return;sync();
     if(a.dataset.rmp!=null){est.P.splice(+a.dataset.rmp,1);if(!est.P.length)est.P.push(blankP())}else{est.J.splice(+a.dataset.rmj,1);if(!est.J.length)est.J.push(blankJ())}renderEst()};
@@ -873,11 +880,11 @@ function parseSheet(name,rows){
     if(cells.includes("nama part")){mode="p";col={nm:cells.indexOf("nama part"),pn:cells.findIndex(x=>x==="no part"||x==="no. part"||x==="part number"),qt:cells.findIndex(x=>x==="qty"),hg:cells.findIndex(x=>x==="harga"),lk:cells.findIndex(x=>x==="lokasi"||x==="lokasi part"||x==="stok"),tt:cells.findIndex(x=>x==="total")};continue}
     if(cells.includes("nama jasa")){mode="j";col={nm:cells.indexOf("nama jasa"),tt:cells.findIndex(x=>x==="total")};continue}
     if(cells.some(x=>/^total (part|jasa)$|^grand total$/.test(x))){mode="";continue}
-    if(mode==="p"){const nm=T(r[col.nm]);if(!nm)continue;const qty=Number(r[col.qt])||1;let hg=Number(r[col.hg])||0;if(!hg&&col.tt>=0)hg=Math.round((Number(r[col.tt])||0)/qty);
+    if(mode==="p"){const nm=T(r[col.nm]);if(!nm)continue;const qty=Number(r[col.qt])||toNum(r[col.qt])||1;let hg=toNum(r[col.hg]);if(!hg&&col.tt>=0)hg=Math.round(toNum(r[col.tt])/qty);
       let pn=col.pn>=0?T(r[col.pn]):"",lok="";const cl=canonLok(pn);if(pn&&(CONFIG.LOKASI_PART||[]).includes(cl)){lok=cl;pn=""}
       if(col.lk>=0&&!lok)lok=canonLok(T(r[col.lk]));
       P.push({nama:nm,pn,lok,qty,harga:hg})}
-    if(mode==="j"){const nm=T(r[col.nm]);if(!nm)continue;J.push({nama:nm,total:Number(r[col.tt])||0})}
+    if(mode==="j"){const nm=T(r[col.nm]);if(!nm)continue;J.push({nama:nm,total:toNum(r[col.tt])})}
   }
   if(!h.nopol)h.nopol=normNopol(name);
   const key=`${h.nopol}|${h.tgl}`;
@@ -917,7 +924,8 @@ function showImport(res){
     const now=new Date().toISOString();let batch=[];
     pick.forEach(v=>{const h={...v.h,sa:canonSA(v.h.sa)||saDef,target:tgt,tgl:v.h.tgl||today()};batch.push(...estDocs(h,v.P,v.J,now,"import Excel"))});
     const skip=batch.filter(x=>ids.has(x.id)).length;batch=batch.filter(x=>!ids.has(x.id));
-    if(!batch.length){err.textContent="Semua data di file ini sudah ada di CR7.";err.hidden=false;return}
+    if(!pick.length){err.textContent="Centang minimal satu kendaraan.";err.hidden=false;return}
+    if(!batch.length){err.textContent="Semua data kendaraan yang dicentang sudah ada di CR7.";err.hidden=false;return}
     const b=$("#iSave");b.disabled=true;b.textContent="Mengimpor…";openImport.busy=true;
     try{let n=0;for(let i=0;i<batch.length;i+=40){n+=await saveMany(batch.slice(i,i+40))}openImport.busy=false;closeDrawer();toast(`${n} baris diimpor${skip?`, ${skip} dilewati (sudah ada)`:""}`)}
     catch(e){openImport.busy=false;b.disabled=false;b.textContent="Coba lagi";err.textContent="Gagal mengimpor: "+(e.message||e.code||"")+". Coba lagi — data tidak akan dobel.";err.hidden=false}
@@ -988,9 +996,11 @@ function openGroupFU(g){
     const st=$("#g_st").value,tgt=$("#g_tgt").value,note=$("#g_note").value.trim(),err=$("#g_err");
     if(!ids.length){err.textContent="Centang minimal satu part.";err.hidden=false;return}
     const b=$("#g_save");b.disabled=true;b.textContent="Menyimpan…";let ok=0;
-    try{for(const id of ids){const r=rows.find(x=>x.id===id);if(!r)continue;const now=new Date().toISOString();
+    try{await store.refresh().catch(()=>{});const now=new Date().toISOString(),batch=[];
+      for(const id of ids){const r=store.cache.get(id)||rows.find(x=>x.id===id);if(!r)continue;
         let n=note||(st!==r.status?`Status diubah ke ${st}.`:"Follow up.");if(tgt&&tgt!==r.target)n+=` Deadline baru ${fmtD(tgt)}.`;
-        await col.doc(id).update({status:st,target:tgt||r.target||"",log:[...(r.log||[]),{t:now,s:st,note:n}],updatedAt:now});ok++}
+        batch.push({id,data:{...r,status:st,target:tgt||r.target||"",log:[...(Array.isArray(r.log)?r.log:[]),{t:now,s:st,note:n}],updatedAt:now}})}
+      ok=await saveMany(batch);
       closeDrawer();toast(`${ok} part di-follow up`)}
     catch(e){b.disabled=false;b.textContent="Coba lagi";err.textContent=`${ok?ok+" part tersimpan, sisanya gagal. ":""}Gagal menyimpan: ${e.message||e.code||""}`;err.hidden=false}
   };
@@ -1033,7 +1043,7 @@ function inPer(r){
   if(rPer==="m0")return t.slice(0,7)===ym(y,m);
   if(rPer==="m1"){const d=new Date(y,m-1,1);return t.slice(0,7)===ym(d.getFullYear(),d.getMonth())}
   if(rPer==="y0")return t.slice(0,4)===String(y);
-  const days=rPer==="d30"?30:90;const lim=new Date(Date.now()-days*864e5);const ls=lim.toISOString().slice(0,10);return t>=ls;
+  const days=rPer==="d30"?30:90;return t>=addDays(today(),-days);
 }
 function tally(list){const c={ok:0,fu:0,new:0,bad:0,N:list.filter(r=>r.jenis!=="jasa").length,vOk:0,vBad:0,v:0};list.forEach(r=>{const k=catOf(r);if(r.jenis!=="jasa")c[k]++;const v=total(r);c.v+=v;if(k==="ok")c.vOk+=v;if(k==="bad")c.vBad+=v});c.F=c.ok+c.fu+c.bad;return c}
 const legendHTML=()=>CAT.map(x=>`<span><i class="sw" style="background:${x.c}"></i>${x.n}</span>`).join("");
@@ -1212,8 +1222,8 @@ function itemHTML(it,i){
     <label><span>Qty</span><input data-k="qty" type="number" min="1" value="${esc(it.qty)}"></label>
    </div>
    <div class="g4b">
-    <label><span>Harga/unit</span><input data-k="harga" type="number" min="0" step="1000" value="${esc(it.harga)}"></label>
-    <label><span>Jasa ganti</span><input data-k="jasa" type="number" min="0" step="1000" value="${esc(it.jasa)}"></label>
+    <label><span>Harga/unit</span><input data-k="harga" type="text" inputmode="numeric" autocomplete="off" value="${esc(it.harga)}"></label>
+    <label><span>Jasa ganti</span><input data-k="jasa" type="text" inputmode="numeric" autocomplete="off" value="${esc(it.jasa)}"></label>
     <label><span>Ket. jasa</span><input data-k="jasaKet" value="${esc(it.jasaKet)}"></label>
    </div>
    <label><span>Lokasi part</span>${lokSel('data-k="lokasi"',it.lokasi)}</label>
@@ -1247,7 +1257,7 @@ function photoStep2(){
   $("#its").addEventListener("input",e=>{
     const el=e.target,box=el.closest(".item");if(!box)return;const it=items[+box.dataset.i],k=el.dataset.k;
     if(k==="on"){it.on=el.checked;box.classList.toggle("off",!it.on)}
-    else if(["qty","harga","jasa"].includes(k))it[k]=Number(el.value)||0; else it[k]=el.value;
+    else if(k==="qty")it[k]=Number(el.value)||0;else if(["harga","jasa"].includes(k))it[k]=toNum(el.value); else it[k]=el.value;
     box.querySelector("[data-t]").textContent=rp(total(it));upd();
   });
   $("#bAddIt").onclick=()=>{syncHead();items.push({id:newId(),on:true,partNo:"",partNama:"",qty:1,harga:0,jasa:0,jasaKet:"",lokasi:"",keterangan:"",yakin:true});photoStep2()};
@@ -1292,7 +1302,8 @@ function go(s,opt={}){
   if(opt.push!==false){try{history.pushState({s,key:detKey},"",s==="home"?"#":"#"+s)}catch(e){}}
   window.scrollTo(0,0);render();
 }
-window.addEventListener("popstate",e=>{const st=e.state||{s:"home"};if(!$("#drawer").hidden){closeDrawer()}go(st.s||"home",{key:st.key,push:false})});
+window.addEventListener("popstate",e=>{if(!$("#drawer").hidden){closeDrawer();try{history.pushState({s:scr,key:detKey},"",scr==="home"?"#":"#"+scr)}catch(_){}return}
+  const st=e.state||{s:"home"};go(st.s||"home",{key:st.key,push:false})});
 $("#tbBack").onclick=()=>{if(history.state&&history.state.s==="detail")history.back();else go("list")};
 document.querySelector(".bnav").addEventListener("click",e=>{const b=e.target.closest("[data-nav]");if(!b)return;const n=b.dataset.nav;if(n==="new")openNewSheet();else go(n)});
 
@@ -1320,7 +1331,7 @@ document.addEventListener("click",e=>{const c=e.target.closest(".vcard[data-g]")
 /* ---------- Beranda ---------- */
 function renderHome(){
   const G=groupsOf(rows),A=G.filter(g=>g.act.length),mon=today().slice(0,7);
-  const inMon=r=>String(r.updatedAt||r.tgl||"").slice(0,7)===mon;
+  const inMon=r=>{const u=r.updatedAt?new Date(r.updatedAt):null;return (u&&!isNaN(u)?ymdL(u):String(r.tgl||"")).slice(0,7)===mon};
   const okM=rows.filter(r=>r.status==="Selesai"&&inMon(r)),badM=rows.filter(r=>r.status==="Batal"&&inMon(r));
   const partsAct=rows.filter(r=>active(r)&&r.jenis!=="jasa").length,late=A.filter(g=>g.late).length,newG=A.filter(g=>g.act.some(r=>catOf(r)==="new")).length;
   const tile=(k,v,ic,col,nav)=>`<button type="button" class="tile" data-go="${nav||""}"><span class="ic" style="background:${col}22;color:${col}">${ic}</span><span class="k">${k}</span><span class="v">${v}</span></button>`;
@@ -1399,15 +1410,16 @@ function newCustomer(seed){
   $("#n_ok").onclick=()=>{const g=id=>$("#"+id).value.trim();const h={nama:g("n_nama"),hp:normHp(g("n_hp")),nopol:normNopol(g("n_nopol")),unit:g("n_unit"),sa:g("n_sa"),target:g("n_tgt")};
     const miss=[];if(!h.nama)miss.push("Nama");if(!h.nopol)miss.push("Plat nomor");if(!h.sa)miss.push("Service Advisor");if(!h.target)miss.push("Deadline");
     if(miss.length){$("#n_err").textContent="Lengkapi: "+miss.join(", ")+".";$("#n_err").hidden=false;return}
+    if(groupByKey(h.nopol)){closeDrawer();go("detail",{key:h.nopol});toast(`${h.nopol} sudah terdaftar — data lama dibuka`);return}
     drafts.set(h.nopol,h);closeDrawer();go("detail",{key:h.nopol});toast("Pelanggan siap — tambahkan part yang belum diganti")};
 }
 document.addEventListener("click",e=>{const c=e.target.closest(".vcard[data-pick]");if(c){e.stopPropagation();closeDrawer();go("detail",{key:c.dataset.g})}},true);
 
 /* ---------- Detail CR7 per kendaraan ---------- */
-function vehInfo(){const g=groupByKey(detKey);if(g)return {g,h:{nama:g.nama,hp:g.hp,nopol:g.nopol,unit:g.unit,sa:g.sa,target:g.target||addDays(today(),7),tgl:g.tgl}};
+function vehInfo(){const g=groupByKey(detKey);if(g){const ft=g.act.map(r=>r.target).filter(t=>t&&t>=today()).sort().pop();return {g,h:{nama:g.nama,hp:g.hp,nopol:g.nopol,unit:g.unit,sa:g.sa,target:ft||addDays(today(),7),tgl:today()}}}
   const d=drafts.get(detKey);return d?{g:null,h:{...d,tgl:today()}}:null}
 function renderDetail(){
-  const v=vehInfo();if(!v){$("#scDetail").innerHTML=`<div class="card2 emptyline">Data tidak ditemukan.</div>`;return}
+  const v=vehInfo();if(!v){$("#scDetail").innerHTML=`<div class="card2 emptyline">Data kendaraan ini sudah tidak ada (dihapus atau nopol diubah).</div><button type="button" class="btn primary block" data-d="back">Kembali ke Pelanggan</button>`;return}
   const {g,h}=v,list=g?g.list:[],P=list.filter(r=>r.jenis!=="jasa"),J=list.filter(r=>r.jenis==="jasa");
   const act=list.filter(active),tot=act.reduce((a,r)=>a+total(r),0),late=act.some(isLate);
   const Pa=P.filter(active),Ja=J.filter(active);
@@ -1444,12 +1456,12 @@ function renderDetail(){
 }
 $("#scDetail").addEventListener("click",e=>{
   const li=e.target.closest(".li[data-id]");if(li){openDetail(li.dataset.id);return}
-  const b=e.target.closest("[data-d]");if(!b)return;const v=vehInfo();if(!v)return;const {g,h}=v;
+  const b=e.target.closest("[data-d]");if(!b)return;if(b.dataset.d==="back"){go("cust");return}const v=vehInfo();if(!v)return;const {g,h}=v;
   const a=b.dataset.d;
   if(a==="addp")addLines("part",h);
   else if(a==="addj")addLines("jasa",h);
   else if(a==="wa")openWA(g);
-  else if(a==="copy"){const t=stickerText(g);navigator.clipboard.writeText(t).then(()=>toast("Teks disalin")).catch(()=>{current=null;$("#dTitle").textContent="Salin teks";$("#dBody").innerHTML=`<textarea style="min-height:260px">${esc(t)}</textarea>`;$("#dFoot").innerHTML="";openDrawer()})}
+  else if(a==="copy"){const t=stickerText(g);Promise.resolve().then(()=>navigator.clipboard.writeText(t)).then(()=>toast("Teks disalin")).catch(()=>{current=null;$("#dTitle").textContent="Salin teks";$("#dBody").innerHTML=`<textarea style="min-height:260px">${esc(t)}</textarea>`;$("#dFoot").innerHTML="";openDrawer()})}
   else if(a==="fu")openGroupFU(g);
   else if(a==="ok"||a==="bad"){openGroupFU(g);$("#g_st").value=a==="ok"?"Selesai":"Batal";$("#dTitle").textContent=a==="ok"?"Tandai sudah diganti":"Tandai tidak datang / batal"}
   else if(a==="edit")editVeh(g);
@@ -1462,16 +1474,16 @@ function addLines(kind,h){
       <input class="pn" data-i="${i}" data-k="pn" value="${esc(x.pn)}" placeholder="No part">
       ${lokSel(`class="lk" data-i="${i}" data-k="lok"`,x.lok)}
       <input class="qt" data-i="${i}" data-k="qty" type="number" min="1" inputmode="numeric" value="${x.qty}">
-      <input class="hg" data-i="${i}" data-k="harga" type="number" min="0" step="1000" inputmode="numeric" value="${x.harga||""}" placeholder="Harga">
+      <input class="hg" data-i="${i}" data-k="harga" type="text" inputmode="numeric" autocomplete="off" value="${x.harga||""}" placeholder="Harga">
       <span class="tot" data-t="${i}">${rp(x.qty*x.harga)}</span><button class="x" type="button" data-rm="${i}">×</button></div>`
      :`<div class="erow j"><span class="n">${i+1}</span><input class="nm" data-i="${i}" data-k="nama" value="${esc(x.nama)}" placeholder="Nama jasa">
-      <input class="hg" data-i="${i}" data-k="total" type="number" min="0" step="1000" inputmode="numeric" value="${x.total||""}" placeholder="Total"><button class="x" type="button" data-rm="${i}">×</button></div>`).join("")}</div>
+      <input class="hg" data-i="${i}" data-k="total" type="text" inputmode="numeric" autocomplete="off" value="${x.total||""}" placeholder="Total"><button class="x" type="button" data-rm="${i}">×</button></div>`).join("")}</div>
      <button type="button" class="btn" id="lAdd" style="justify-self:start">+ Baris</button><p class="err" id="l_err" hidden></p>`;
     $("#lAdd").onclick=()=>{L.push(isP?blankP():blankJ());draw();$(`[data-i="${L.length-1}"][data-k="nama"]`).focus()}};
   draw();
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="l_b">Batal</button><button class="btn primary" type="button" id="l_ok">Simpan</button>`;
   openDrawer();
-  $("#dBody").oninput=e=>{const t=e.target;if(t.dataset.i==null)return;const x=L[+t.dataset.i],k=t.dataset.k;x[k]=["qty","harga","total"].includes(k)?(Number(t.value)||0):t.value;const tt=$(`[data-t="${t.dataset.i}"]`);if(tt)tt.textContent=rp(x.qty*x.harga)};
+  $("#dBody").oninput=e=>{const t=e.target;if(t.dataset.i==null)return;const x=L[+t.dataset.i],k=t.dataset.k;x[k]=k==="qty"?(Number(t.value)||0):["harga","total"].includes(k)?toNum(t.value):t.value;const tt=$(`[data-t="${t.dataset.i}"]`);if(tt)tt.textContent=rp(x.qty*x.harga)};
   $("#dBody").onclick=e=>{const r=e.target.closest("[data-rm]");if(!r)return;L.splice(+r.dataset.rm,1);if(!L.length)L.push(isP?blankP():blankJ());draw()};
   setTimeout(()=>$('[data-i="0"][data-k="nama"]')?.focus(),60);
   $("#l_b").onclick=closeDrawer;
@@ -1500,7 +1512,8 @@ function editVeh(g){
      catch(e){b.disabled=false;b.textContent="Coba lagi";$("#v_err").textContent="Gagal menghapus: "+(e.message||e.code||"");$("#v_err").hidden=false}}}
   $("#v_ok").onclick=async()=>{const n={pelanggan:$("#v_nama").value.trim(),kontak:normHp($("#v_hp").value),unit:$("#v_unit").value.trim(),sa:$("#v_sa").value.trim()},tgt=$("#v_tgt").value,now=new Date().toISOString();
     const b=$("#v_ok");b.disabled=true;b.textContent="Menyimpan…";
-    try{await saveMany(g.list.map(r=>({id:r.id,data:{...r,...n,...(active(r)&&tgt?{target:tgt}:{}),updatedAt:now}})));closeDrawer();toast("Data diperbarui")}
+    try{await store.refresh().catch(()=>{});const L=g.list.map(r=>store.cache.get(r.id)).filter(Boolean);
+      await saveMany(L.map(r=>({id:r.id,data:{...r,...n,...(active(r)&&tgt?{target:tgt}:{}),updatedAt:now}})));closeDrawer();toast("Data diperbarui")}
     catch(e){b.disabled=false;b.textContent="Coba lagi";$("#v_err").textContent="Gagal: "+(e.message||e.code||"");$("#v_err").hidden=false}};
 }
 
@@ -1528,10 +1541,10 @@ function openWA(g){
   $("#w_b").onclick=closeDrawer;
   $("#w_go").onclick=async()=>{const txt=$("#w_txt").value,log=$("#w_log")?.checked;
     const url=`https://wa.me/${waNum(g.hp)}?text=${encodeURIComponent(txt)}`;
-    const w=window.open(url,"_blank");if(!w)location.href=url;
+    const w=window.open(url,"_blank");
     if(log){const now=new Date().toISOString(),nm={info:"Info part",remind:"Pengingat"}[kind]||"Pesan";
-      try{await saveMany(g.act.map(r=>({id:r.id,data:{...r,status:r.status==="Open"?"Follow Up":r.status,log:[...(r.log||[]),{t:now,s:r.status==="Open"?"Follow Up":r.status,note:`Dihubungi via WhatsApp (${nm}).`}],updatedAt:now}})));toast("Follow up via WhatsApp tercatat")}catch(e){toast("WA dibuka, tapi gagal mencatat follow up")}}
-    closeDrawer()};
+      try{await store.refresh().catch(()=>{});await saveMany(g.act.map(r=>store.cache.get(r.id)||r).filter(active).map(r=>({id:r.id,data:{...r,status:r.status==="Open"?"Follow Up":r.status,log:[...(r.log||[]),{t:now,s:r.status==="Open"?"Follow Up":r.status,note:`Dihubungi via WhatsApp (${nm}).`}],updatedAt:now}})));toast("Follow up via WhatsApp tercatat")}catch(e){toast("WA dibuka, tapi gagal mencatat follow up")}}
+    closeDrawer();if(!w)location.href=url};
 }
 
 /* events */
@@ -1570,7 +1583,7 @@ async function api(action,payload,signal){
 }
 const store={cache:new Map(),subs:[],timer:null,
   emit(){const docs=[...this.cache.values()].map(o=>({id:o.id,data:()=>o}));this.subs.forEach(f=>f({docs}))},
-  async refresh(){const j=await api("list",{});this.cache=new Map((j.rows||[]).map(r=>[r.id,r]));this.emit()},
+  async refresh(){const j=await api("list",{});this.cache=new Map((j.rows||[]).filter(r=>r&&r.id).map(r=>{if(!Array.isArray(r.log))r.log=[];return [String(r.id),r]}));this.emit()},
 };
 const clean=o=>JSON.parse(JSON.stringify(o));
 col={
