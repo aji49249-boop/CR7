@@ -233,6 +233,8 @@ label.req span::after{content:" *";color:var(--late)}
 .est-h{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .etab{display:grid;gap:6px}
 .erow{display:grid;grid-template-columns:26px minmax(0,2.4fr) minmax(0,1.2fr) 64px minmax(0,1.2fr) minmax(0,1.2fr) 30px;gap:6px;align-items:center}
+.erow.l{grid-template-columns:26px minmax(0,2.2fr) minmax(0,1fr) minmax(0,1.1fr) 58px minmax(0,1.1fr) minmax(0,1.1fr) 30px}
+.erow select{padding:7px 6px;font-size:13px}
 .erow.j{grid-template-columns:26px minmax(0,4fr) minmax(0,1.4fr) 30px}
 .erow.hd{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
 .erow input{padding:7px 8px;font-size:13.5px}
@@ -252,8 +254,9 @@ label.req span::after{content:" *";color:var(--late)}
 @media (max-width:620px){.est-h{grid-template-columns:1fr 1fr}
   .erow{grid-template-columns:22px 1fr 1fr 26px;grid-template-areas:"n nm nm x" "n pn qt x" "n hg tt x"}
   .erow .n{grid-area:n}.erow .nm{grid-area:nm}.erow .pn{grid-area:pn}.erow .qt{grid-area:qt}.erow .hg{grid-area:hg}.erow .tot{grid-area:tt;align-self:center}.erow .x{grid-area:x}
+  .erow.l{grid-template-columns:22px 1fr 1fr 26px;grid-template-areas:"n nm nm x" "n pn lk x" "n qt hg x" "n tt tt x"}.erow .lk{grid-area:lk}
   .erow.hd{display:none}.erow{padding-bottom:8px;border-bottom:1px dashed var(--line)}
-  .erow.j{grid-template-columns:22px 1fr 1fr 26px;grid-template-areas:"n nm nm x" "n hg hg x"}}
+.erow.j{grid-template-columns:22px 1fr 1fr 26px;grid-template-areas:"n nm nm x" "n hg hg x"}}
 .tip{position:fixed;z-index:40;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;padding:7px 10px;border-radius:6px;box-shadow:var(--shadow);max-width:240px}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.kpis .kpi:first-child{grid-column:1/-1}.panels{grid-template-columns:1fr}}
 @media (max-width:520px){.fun .row{grid-template-columns:1fr 90px}.fun .row .tr{grid-column:1/-1;grid-row:2}.sal .row{grid-template-columns:1fr 80px}.sal .row .stack{grid-column:1/-1;grid-row:2}}
@@ -487,7 +490,8 @@ th{background:var(--surface-2)}
    ACCESS_CODE: isi sama dengan ACCESS_CODE di Apps Script bila dipakai, atau biarkan "". */
 /* DAFTAR_SA: isi nama semua Service Advisor agar selalu muncul di pilihan dropdown,
    contoh: ["RUDI","SARI","ANDI"]. Nama SA yang sudah ada di data juga otomatis ikut muncul. */
-const CONFIG={DAFTAR_SA:["M.Nur Syahputra","Adhtya Dwi Prasetya","Hengki Pranata","Rudianto","Popo H","Tomy Surya","Dedi Ashdarma","Khoirul Al Huda","Yudi Rahmanto"],NAMA_BENGKEL:"PT. Perintis Perkasa",API_URL:"https://script.google.com/macros/s/AKfycbyTcvygAHPX4zg3h30bpN7G-Lv6KrJrHm0Cmr4NUmQk6Pgm-VqXJu3IW69aOnT4KBwS/exec",ACCESS_CODE:""};
+/* LOKASI_PART: pilihan lokasi / ketersediaan part */
+const CONFIG={LOKASI_PART:["Ready","Depo 1","Jakarta","Thailand"],DAFTAR_SA:["M.Nur Syahputra","Adhtya Dwi Prasetya","Hengki Pranata","Rudianto","Popo H","Tomy Surya","Dedi Ashdarma","Khoirul Al Huda","Yudi Rahmanto"],NAMA_BENGKEL:"PT. Perintis Perkasa",API_URL:"https://script.google.com/macros/s/AKfycbyTcvygAHPX4zg3h30bpN7G-Lv6KrJrHm0Cmr4NUmQk6Pgm-VqXJu3IW69aOnT4KBwS/exec",ACCESS_CODE:""};
 (function(){
 const STATUSES=["Open","Follow Up","Selesai","Batal"];
 const $=s=>document.querySelector(s);
@@ -526,6 +530,13 @@ function counts(){
   B.forEach(r=>{c[r.status]=(c[r.status]||0)+1;if(active(r))c.Aktif++;if(isLate(r))c["Lewat Target"]++});
   return c;
 }
+function canonLok(v){v=String(v||"").trim();if(!v)return "";const k=v.toLowerCase().replace(/[^a-z0-9]/g,"");
+  const L=CONFIG.LOKASI_PART||[];const f=L.find(x=>x.toLowerCase().replace(/[^a-z0-9]/g,"")===k);if(f)return f;
+  if(/^(ready|rdy|ada|stok|stock|tersedia)/.test(k))return "Ready";if(/^depo/.test(k))return "Depo 1";if(/^(jkt|jakarta|jak)/.test(k))return "Jakarta";if(/^(th|thai|thailand|tl)$/.test(k)||/^thai/.test(k))return "Thailand";return v}
+function lokSel(attrs,val){val=canonLok(val);const L=[...(CONFIG.LOKASI_PART||[])];if(val&&!L.includes(val))L.push(val);
+  return `<select ${attrs}><option value="">Lokasi…</option>${L.map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}</select>`}
+const LOKC={"Ready":"#4fd38a","Depo 1":"#6aa8ff","Jakarta":"#ffc24d","Thailand":"#c792ff"};
+const lokBadge=v=>{v=canonLok(v);return v?`<span class="pill" style="font-size:10.5px;padding:0 7px;background:${(LOKC[v]||"#9097a3")}22;color:${LOKC[v]||"#9097a3"}">${esc(v)}</span>`:""};
 function allSA(formOnly){const m=new Map();[...(CONFIG.DAFTAR_SA||[]),...(formOnly&&(CONFIG.DAFTAR_SA||[]).length?[]:rows.map(r=>canonSA(r.sa)))].forEach(n=>{n=String(n||"").trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)});return [...m.values()].sort((a,b)=>a.localeCompare(b))}
 function saSel(id,val){val=canonSA(val);const all=allSA(true);const cur=all.find(n=>n.toLowerCase()===val.toLowerCase());
   if(val&&!cur)all.push(val);const v=cur||val;
@@ -595,7 +606,7 @@ function renderCore(){
     <td><div>${esc(r.partNama)}</div><div class="small muted mono">${esc(r.partNo)}</div></td>
     <td class="num">${esc(r.qty)}</td>
     <td class="num"><div>${rp(total(r))}</div><div class="small muted">jasa ${rp(r.jasa)}</div></td>
-    <td style="min-width:110px">${esc(r.lokasi)||"—"}</td>
+    <td style="min-width:110px">${lokBadge(r.lokasi)||"—"}</td>
     <td style="min-width:180px;max-width:260px"><div>${esc(r.catatan)||"—"}</div><div class="small muted">${esc(r.alasan)}</div></td>
     <td>${esc(r.pic)||"—"}</td>
     <td style="white-space:nowrap">${fmtD(r.target)}<div class="small" style="${isLate(r)?"color:var(--late);font-weight:600":"color:var(--muted)"}">${sisa(r)}</div></td>
@@ -649,7 +660,7 @@ function formHTML(r){
     <div class="total"><span class="muted">Total estimasi (part + jasa)</span><b id="f_total">${rp(total(r))}</b></div>
     <label class="req"><span>Alasan tidak diganti</span>
       <select id="f_alasan">${["Pelanggan menunda","Part tidak tersedia (indent)","Budget pelanggan","Menunggu approval","Lainnya"].map(a=>`<option ${r.alasan===a?"selected":""}>${a}</option>`).join("")}</select></label>
-    <label><span>Lokasi part</span><input id="f_lok" value="${o(r.lokasi)}" placeholder="mis. Depan kiri, Ruang mesin, Rak A3"></label>
+    <label><span>Lokasi part</span>${lokSel('id="f_lok"',r.lokasi)}</label>
     <label><span>Keterangan</span><textarea id="f_cat" placeholder="mis. Sisa kampas 2 mm, pelanggan minta dihubungi minggu depan">${o(r.catatan)}</textarea></label>
   </fieldset>
   <fieldset style="margin-top:16px"><legend>Follow Up</legend>
@@ -714,7 +725,7 @@ function openDetail(id){
     <dt>No. HP</dt><dd><span class="mono">${esc(r.kontak)||"—"}</span></dd>
     <dt>Tanggal servis</dt><dd>${fmtD(r.tgl)}${r.mekanik?` · Mekanik ${esc(r.mekanik)}`:""}</dd>
     <dt>Deadline</dt><dd>${fmtD(r.target)} · ${sisa(r)}</dd>${r.pic?`<dt>PIC follow up</dt><dd>${esc(r.pic)}</dd>`:""}
-    <dt>Lokasi part</dt><dd>${esc(r.lokasi)||"—"}</dd>
+    <dt>Lokasi part</dt><dd>${lokBadge(r.lokasi)||"—"}</dd>
     <dt>Keterangan</dt><dd>${esc(r.catatan)||"—"}</dd>
    </dl>
    ${canWrite?`<fieldset><legend>Catat Follow Up</legend>
@@ -785,10 +796,11 @@ function renderEst(){
     <label><span>Alasan belum diganti</span><select id="e_alasan">${["Pelanggan menunda","Part tidak tersedia (indent)","Budget pelanggan","Menunggu approval","Lainnya"].map(a=>`<option ${h.alasan===a?"selected":""}>${a}</option>`).join("")}</select></label>
    </div></fieldset>
    <fieldset><legend>Part</legend><div class="etab" id="eP">
-     <div class="erow hd"><span>No</span><span>Nama Part</span><span>No Part</span><span>Qty</span><span>Harga</span><span style="text-align:right">Total</span><span></span></div>
-     ${est.P.map((p,i)=>`<div class="erow"><span class="n">${i+1}</span>
+     <div class="erow l hd"><span>No</span><span>Nama Part</span><span>No Part</span><span>Lokasi</span><span>Qty</span><span>Harga</span><span style="text-align:right">Total</span><span></span></div>
+     ${est.P.map((p,i)=>`<div class="erow l"><span class="n">${i+1}</span>
        <input class="nm" data-p="${i}" data-k="nama" value="${o(p.nama)}" placeholder="Nama part">
        <input class="pn" data-p="${i}" data-k="pn" value="${o(p.pn)}" placeholder="No part">
+       ${lokSel(`class="lk" data-p="${i}" data-k="lok"`,p.lok)}
        <input class="qt" data-p="${i}" data-k="qty" type="number" min="1" inputmode="numeric" value="${o(p.qty)}">
        <input class="hg" data-p="${i}" data-k="harga" type="number" min="0" step="1000" inputmode="numeric" value="${p.harga||""}" placeholder="Harga">
        <span class="tot" data-pt="${i}">${rp(p.qty*p.harga)}</span>
@@ -823,7 +835,7 @@ function renderEst(){
 function estDocs(h,P,J,now,src){
   const grp="G-"+newId(),base={tgl:h.tgl,sa:h.sa,nopol:h.nopol,unit:[h.unit,h.tahun].filter(Boolean).join(" "),pelanggan:h.nama,kontak:h.hp,alasan:h.alasan||"Pelanggan menunda",target:h.target,status:"Open",grup:grp,sumber:src,createdAt:now,updatedAt:now};
   const out=[];
-  P.forEach((p,i)=>out.push({id:p.id,data:{...base,id:p.id,urut:i+1,jenis:"part",no:genNo(),partNama:p.nama.trim(),partNo:(p.pn||"").trim(),qty:+p.qty||1,harga:+p.harga||0,jasa:0,log:[{t:now,s:"Open",note:"CR7 dibuat ("+src+"). Alasan: "+base.alasan}]}}));
+  P.forEach((p,i)=>out.push({id:p.id,data:{...base,id:p.id,urut:i+1,jenis:"part",no:genNo(),partNama:p.nama.trim(),partNo:(p.pn||"").trim(),lokasi:canonLok(p.lok),qty:+p.qty||1,harga:+p.harga||0,jasa:0,log:[{t:now,s:"Open",note:"CR7 dibuat ("+src+"). Alasan: "+base.alasan}]}}));
   J.forEach((j,i)=>out.push({id:j.id,data:{...base,id:j.id,urut:100+i+1,jenis:"jasa",no:genNo(),partNama:j.nama.trim(),partNo:"",qty:1,harga:0,jasa:+j.total||0,log:[{t:now,s:"Open",note:"Jasa dicatat ("+src+")."}]}}));
   return out;
 }
@@ -858,11 +870,13 @@ function parseSheet(name,rows){
       if(s==="service advisor"&&!h.sa){for(let k=ri-1;k>=0;k--){const v=T((rows[k]||[]).find(x=>T(x)));if(v&&!/hormat/i.test(v)){h.sa=v;break}}}
     });
     const cells=r.map(L);
-    if(cells.includes("nama part")){mode="p";col={nm:cells.indexOf("nama part"),pn:cells.findIndex(x=>x==="no part"||x==="no. part"||x==="part number"),qt:cells.findIndex(x=>x==="qty"),hg:cells.findIndex(x=>x==="harga"),tt:cells.findIndex(x=>x==="total")};continue}
+    if(cells.includes("nama part")){mode="p";col={nm:cells.indexOf("nama part"),pn:cells.findIndex(x=>x==="no part"||x==="no. part"||x==="part number"),qt:cells.findIndex(x=>x==="qty"),hg:cells.findIndex(x=>x==="harga"),lk:cells.findIndex(x=>x==="lokasi"||x==="lokasi part"||x==="stok"),tt:cells.findIndex(x=>x==="total")};continue}
     if(cells.includes("nama jasa")){mode="j";col={nm:cells.indexOf("nama jasa"),tt:cells.findIndex(x=>x==="total")};continue}
     if(cells.some(x=>/^total (part|jasa)$|^grand total$/.test(x))){mode="";continue}
     if(mode==="p"){const nm=T(r[col.nm]);if(!nm)continue;const qty=Number(r[col.qt])||1;let hg=Number(r[col.hg])||0;if(!hg&&col.tt>=0)hg=Math.round((Number(r[col.tt])||0)/qty);
-      P.push({nama:nm,pn:col.pn>=0?T(r[col.pn]):"",qty,harga:hg})}
+      let pn=col.pn>=0?T(r[col.pn]):"",lok="";const cl=canonLok(pn);if(pn&&(CONFIG.LOKASI_PART||[]).includes(cl)){lok=cl;pn=""}
+      if(col.lk>=0&&!lok)lok=canonLok(T(r[col.lk]));
+      P.push({nama:nm,pn,lok,qty,harga:hg})}
     if(mode==="j"){const nm=T(r[col.nm]);if(!nm)continue;J.push({nama:nm,total:Number(r[col.tt])||0})}
   }
   if(!h.nopol)h.nopol=normNopol(name);
@@ -946,7 +960,7 @@ function stickerHTML(g,noActs){
 function stickerText(g){
   const L=[`CR7 – ${g.nopol||"-"}${g.unit?` (${g.unit})`:""}`,`Nama   : ${g.nama||"-"}`,`No. HP : ${g.hp||"-"}`,`SA     : ${g.sa||"-"}`,``,`Sparepart yang harus diganti:`];
   const src=g.act.length?g.act:g.list,PP=src.filter(r=>r.jenis!=="jasa"),JJ=src.filter(r=>r.jenis==="jasa");
-  PP.forEach((r,i)=>L.push(`${i+1}. ${r.partNama} x${r.qty} – ${rp(total(r))}${r.lokasi?` (${r.lokasi})`:""}${r.catatan?` – ${r.catatan}`:""}`));
+  PP.forEach((r,i)=>L.push(`${i+1}. ${r.partNama} x${r.qty} – ${rp(total(r))}${r.lokasi?` [${canonLok(r.lokasi)}]`:""}${r.catatan?` – ${r.catatan}`:""}`));
   if(JJ.length){L.push(``,`Jasa:`);JJ.forEach((r,i)=>L.push(`${i+1}. ${r.partNama} – ${rp(total(r))}`))}
   L.push(``,`Total  : ${rp(g.act.length?g.total:g.all)}`);if(g.target)L.push(`Deadline: ${fmtD(g.target)}`);
   return L.join("\n");
@@ -1117,13 +1131,13 @@ Sparepart: baca semua baris dan jabarkan setiap sparepart yang perlu diganti.
 - "jasa" = biaya jasa penggantian untuk part itu (total). Baris jasa terpisah yang jelas milik part tertentu digabungkan ke part itu. Jika tidak jelas milik part mana, buat item sendiri dengan partNama "Jasa: <keterangan>", qty 1, harga 0.
 - qty default 1 jika tidak tertulis.
 - Rapikan nama part (kapital di awal kata, perbaiki salah eja umum), tetapi jangan mengarang part yang tidak tertulis.
-- "lokasi" = posisi part pada kendaraan bila tertulis atau jelas dari nama part (mis. "Depan kiri", "Belakang", "Ruang mesin", "Kaki-kaki depan"), kosong jika tidak jelas.
+- "lokasi" = lokasi/ketersediaan stok part bila tertulis: salah satu dari "Ready" (stok ada), "Depo 1", "Jakarta" (mis. tertulis JKT), "Thailand" (mis. TH/THAI). Kosong jika tidak tertulis.
 - "keterangan" = catatan tambahan untuk part itu (kondisi, sisa ketebalan, permintaan pelanggan, dll.), kosong jika tidak ada.
 - "yakin": false jika tulisan sulit dibaca atau angkanya meragukan.`:`
 Tidak ada foto sparepart; kembalikan "items": [].`}
 
 Balas HANYA JSON dengan bentuk:
-{"sa":"","nopol":"","unit":"","pelanggan":"","hp":"","items":[{"partNo":"","partNama":"Kampas Rem Depan","qty":1,"harga":650000,"jasa":150000,"jasaKet":"Ganti kampas rem depan","lokasi":"Depan","keterangan":"Sisa 2 mm","yakin":true}],"catatan":"hal yang perlu dicek ulang, atau kosong"}`;
+{"sa":"","nopol":"","unit":"","pelanggan":"","hp":"","items":[{"partNo":"","partNama":"Kampas Rem Depan","qty":1,"harga":650000,"jasa":150000,"jasaKet":"Ganti kampas rem depan","lokasi":"Ready","keterangan":"Sisa 2 mm","yakin":true}],"catatan":"hal yang perlu dicek ulang, atau kosong"}`;
 }
 function slotHTML(k,title,hint){
   const f=photos[k];
@@ -1202,7 +1216,7 @@ function itemHTML(it,i){
     <label><span>Jasa ganti</span><input data-k="jasa" type="number" min="0" step="1000" value="${esc(it.jasa)}"></label>
     <label><span>Ket. jasa</span><input data-k="jasaKet" value="${esc(it.jasaKet)}"></label>
    </div>
-   <label><span>Lokasi part</span><input data-k="lokasi" value="${esc(it.lokasi)}" placeholder="mis. Depan kiri, Ruang mesin"></label>
+   <label><span>Lokasi part</span>${lokSel('data-k="lokasi"',it.lokasi)}</label>
    <label><span>Keterangan</span><input data-k="keterangan" value="${esc(it.keterangan)}" placeholder="kondisi part, permintaan pelanggan…"></label></div>`;
 }
 function grand(){return items.filter(x=>x.on).reduce((a,x)=>a+total(x),0)}
@@ -1402,7 +1416,7 @@ function renderDetail(){
   const visits=[...vm].sort((a,b)=>String(b[0]).localeCompare(String(a[0])));
   const sumOf=a=>a.reduce((x,r)=>x+total(r),0),okAll=list.filter(r=>r.status==="Selesai"),badAll=list.filter(r=>r.status==="Batal");
   const li=(r,ic)=>`<button type="button" class="li ${active(r)?"":"done"}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><span class="t">${esc(r.partNama)}</span><span class="p">${rp(total(r))}</span>
-     <span class="m">${r.jenis!=="jasa"?`${rp(r.harga)} × ${esc(r.qty)}${r.partNo?` · ${esc(r.partNo)}`:""} · `:""}<span class="pill ${sc(r.status)}" style="font-size:10.5px;padding:0 7px">${esc(r.status)}</span>${r.catatan?` · ${esc(r.catatan)}`:""}</span></button>`;
+     <span class="m">${r.jenis!=="jasa"?`${rp(r.harga)} × ${esc(r.qty)}${r.partNo?` · ${esc(r.partNo)}`:""} · `:""}${r.jenis!=="jasa"&&r.lokasi?lokBadge(r.lokasi)+" ":""}<span class="pill ${sc(r.status)}" style="font-size:10.5px;padding:0 7px">${esc(r.status)}</span>${r.catatan?` · ${esc(r.catatan)}`:""}</span></button>`;
   const logs=list.flatMap(r=>(r.log||[]).map(l=>({...l,p:r.partNama}))).sort((a,b)=>String(b.t).localeCompare(String(a.t)));
   const seen=new Set(),L=logs.filter(l=>{const k=String(l.t).slice(0,16)+l.note;if(seen.has(k))return false;seen.add(k);return true}).slice(0,8);
   $("#scDetail").innerHTML=`
@@ -1443,9 +1457,10 @@ $("#scDetail").addEventListener("click",e=>{
 function addLines(kind,h){
   current=null;const isP=kind==="part";let L=[isP?blankP():blankJ()];
   $("#dTitle").textContent=(isP?"Tambah sparepart · ":"Tambah jasa · ")+h.nopol;
-  const draw=()=>{$("#dBody").innerHTML=`<div class="etab">${L.map((x,i)=>isP?`<div class="erow"><span class="n">${i+1}</span>
+  const draw=()=>{$("#dBody").innerHTML=`<div class="etab">${isP?`<div class="erow l hd"><span>No</span><span>Nama Part</span><span>No Part</span><span>Lokasi</span><span>Qty</span><span>Harga</span><span style="text-align:right">Total</span><span></span></div>`:""}${L.map((x,i)=>isP?`<div class="erow l"><span class="n">${i+1}</span>
       <input class="nm" data-i="${i}" data-k="nama" value="${esc(x.nama)}" placeholder="Nama part">
       <input class="pn" data-i="${i}" data-k="pn" value="${esc(x.pn)}" placeholder="No part">
+      ${lokSel(`class="lk" data-i="${i}" data-k="lok"`,x.lok)}
       <input class="qt" data-i="${i}" data-k="qty" type="number" min="1" inputmode="numeric" value="${x.qty}">
       <input class="hg" data-i="${i}" data-k="harga" type="number" min="0" step="1000" inputmode="numeric" value="${x.harga||""}" placeholder="Harga">
       <span class="tot" data-t="${i}">${rp(x.qty*x.harga)}</span><button class="x" type="button" data-rm="${i}">×</button></div>`
@@ -1494,7 +1509,7 @@ const waNum=hp=>{let d=String(hp||"").replace(/\D/g,"");if(d.startsWith("0"))d="
 function waText(kind,g){
   const src=g.act.length?g.act:g.list,P=src.filter(r=>r.jenis!=="jasa"),J=src.filter(r=>r.jenis==="jasa"),tot=src.reduce((a,r)=>a+total(r),0);
   const veh=`${g.nopol}${g.unit?` (${g.unit})`:""}`,sign=`\n\nSalam,\n${g.sa||"Service Advisor"} – Service Advisor\n${CONFIG.NAMA_BENGKEL||""}`.trimEnd();
-  const lines=P.map((r,i)=>`${i+1}. ${r.partNama}${r.qty>1?` (${r.qty}x)`:""} – ${rp(total(r))}`).join("\n")+(J.length?`\n\nJasa:\n`+J.map((r,i)=>`${i+1}. ${r.partNama} – ${rp(total(r))}`).join("\n"):"");
+  const lines=P.map((r,i)=>`${i+1}. ${r.partNama}${r.qty>1?` (${r.qty}x)`:""} – ${rp(total(r))}${r.lokasi?` [${canonLok(r.lokasi)}]`:""}`).join("\n")+(J.length?`\n\nJasa:\n`+J.map((r,i)=>`${i+1}. ${r.partNama} – ${rp(total(r))}`).join("\n"):"");
   if(kind==="info")return `Halo Bapak/Ibu ${g.nama},\n\nTerima kasih sudah servis di bengkel kami. Untuk kendaraan ${veh}, berikut sparepart yang disarankan untuk segera diganti:\n\n${lines}\n\nTotal estimasi: ${rp(tot)}\n\nMohon dijadwalkan penggantiannya${g.target?` sebelum ${fmtD(g.target)}`:""}. Silakan balas pesan ini untuk booking jadwal.${sign}`;
   if(kind==="remind")return `Halo Bapak/Ibu ${g.nama},\n\nKami mengingatkan kembali bahwa kendaraan ${veh} masih memiliki sparepart yang perlu diganti:\n\n${lines}\n\nTotal estimasi: ${rp(tot)}\n\nKapan Bapak/Ibu ada waktu untuk ke bengkel? Kami siap membantu menjadwalkannya.${sign}`;
   return `Halo Bapak/Ibu ${g.nama},\n\nTerima kasih sudah melakukan penggantian sparepart kendaraan ${veh} di bengkel kami. Semoga kendaraan kembali nyaman digunakan.\n\nJika ada keluhan, silakan hubungi kami melalui nomor ini.${sign}`;
