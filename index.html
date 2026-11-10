@@ -406,8 +406,8 @@ th{background:var(--surface-2)}
   <section class="screen" id="scList" hidden>
   <section class="sabar" aria-label="Cari per Service Advisor">
     <label class="lbl" for="sa">Service Advisor</label>
-    <div class="sarow"><input id="sa" list="saList" autocomplete="off" placeholder="Ketik nama SA…"><button class="btn" type="button" id="saClr" hidden>Semua SA</button></div>
-    <div class="chips" id="saChips"></div>
+    <div class="sarow"><select id="sa" aria-label="Pilih Service Advisor"><option value="">Semua SA</option></select><button class="btn" type="button" id="saClr" hidden>Semua SA</button></div>
+    <div class="chips" id="saChips" hidden></div>
     <datalist id="saList"></datalist>
   </section>
   <section class="board" id="board" hidden></section>
@@ -485,7 +485,9 @@ th{background:var(--surface-2)}
 /* ============ KONFIGURASI ============
    Tempel URL Web App Apps Script Anda di bawah (lihat PANDUAN.md).
    ACCESS_CODE: isi sama dengan ACCESS_CODE di Apps Script bila dipakai, atau biarkan "". */
-const CONFIG={NAMA_BENGKEL:"PT. Perintis Perkasa",API_URL:"https://script.google.com/macros/s/AKfycbyTcvygAHPX4zg3h30bpN7G-Lv6KrJrHm0Cmr4NUmQk6Pgm-VqXJu3IW69aOnT4KBwS/exec",ACCESS_CODE:""};
+/* DAFTAR_SA: isi nama semua Service Advisor agar selalu muncul di pilihan dropdown,
+   contoh: ["RUDI","SARI","ANDI"]. Nama SA yang sudah ada di data juga otomatis ikut muncul. */
+const CONFIG={DAFTAR_SA:["M.Nur Syahputra","Adhtya Dwi Prasetya","Hengki Pranata","Rudianto","Popo H","Tomy Surya","Dedi Ashdarma","Khoirul Al Huda","Yudi Rahmanto"],NAMA_BENGKEL:"PT. Perintis Perkasa",API_URL:"https://script.google.com/macros/s/AKfycbyTcvygAHPX4zg3h30bpN7G-Lv6KrJrHm0Cmr4NUmQk6Pgm-VqXJu3IW69aOnT4KBwS/exec",ACCESS_CODE:""};
 (function(){
 const STATUSES=["Open","Follow Up","Selesai","Batal"];
 const $=s=>document.querySelector(s);
@@ -509,21 +511,37 @@ try{const f=localStorage.getItem("cr7-filter");if(f)filter=f}catch(e){}
 try{saQ=localStorage.getItem("cr7-sa")||""}catch(e){}
 
 const active=r=>r.status==="Open"||r.status==="Follow Up";
-function saNames(){const m=new Map();rows.forEach(r=>{const n=String(r.sa||"").trim();if(!n)return;const k=n.toLowerCase();const e=m.get(k)||{name:n,act:0,late:0};if(active(r))e.act++;if(isLate(r))e.late++;m.set(k,e)});return[...m.values()].sort((x,y)=>y.act-x.act||x.name.localeCompare(y.name))}
-function saMatch(r){if(!saQ.trim())return true;const t=saQ.trim().toLowerCase(),n=String(r.sa||"").toLowerCase();
-  const exact=rows.some(x=>String(x.sa||"").toLowerCase()===t);return exact?n===t:n.includes(t)}
+/* Samakan nama SA dengan DAFTAR_SA: huruf besar/kecil, titik/spasi, atau nama depan saja (mis. "RUDI" → "Rudianto") */
+const _sk=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+function canonSA(n){n=String(n||"").trim();if(!n)return "";const L=CONFIG.DAFTAR_SA||[],k=_sk(n);
+  let f=L.find(x=>_sk(x)===k);if(f)return f;
+  if(k.length>=3){const c=L.filter(x=>_sk(x).startsWith(k)||_sk(x.split(/\s+/)[0])===k||_sk(x.split(/\s+/).slice(-1)[0])===k);if(c.length===1)return c[0]}
+  return n}
+function saNames(){const m=new Map();rows.forEach(r=>{const n=canonSA(r.sa);if(!n)return;const k=n.toLowerCase();const e=m.get(k)||{name:n,act:0,late:0};if(active(r))e.act++;if(isLate(r))e.late++;m.set(k,e)});return[...m.values()].sort((x,y)=>y.act-x.act||x.name.localeCompare(y.name))}
+function saMatch(r){if(!saQ.trim())return true;const t=canonSA(saQ).toLowerCase(),n=canonSA(r.sa).toLowerCase();
+  const exact=allSA().some(x=>x.toLowerCase()===t);return exact?n===t:n.includes(t)}
 const base=()=>rows.filter(saMatch);
 function counts(){
   const B=base();const c={Aktif:0,Semua:B.length,"Lewat Target":0};STATUSES.forEach(s=>c[s]=0);
   B.forEach(r=>{c[r.status]=(c[r.status]||0)+1;if(active(r))c.Aktif++;if(isLate(r))c["Lewat Target"]++});
   return c;
 }
+function allSA(formOnly){const m=new Map();[...(CONFIG.DAFTAR_SA||[]),...(formOnly&&(CONFIG.DAFTAR_SA||[]).length?[]:rows.map(r=>canonSA(r.sa)))].forEach(n=>{n=String(n||"").trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)});return [...m.values()].sort((a,b)=>a.localeCompare(b))}
+function saSel(id,val){val=canonSA(val);const all=allSA(true);const cur=all.find(n=>n.toLowerCase()===val.toLowerCase());
+  if(val&&!cur)all.push(val);const v=cur||val;
+  return `<select id="${id}" class="sa-sel"><option value="">— Pilih SA —</option>${all.map(n=>`<option value="${esc(n)}" ${n===v?"selected":""}>${esc(n)}</option>`).join("")}<option value="__new">+ SA lain (ketik nama)…</option></select>`}
+document.addEventListener("change",e=>{const s=e.target.closest("select.sa-sel");if(!s||s.value!=="__new")return;
+  const i=document.createElement("input");i.id=s.id;i.placeholder="Ketik nama SA";i.autocomplete="off";i.style.textTransform="uppercase";
+  i.addEventListener("input",()=>{const p=i.selectionStart;i.value=i.value.toUpperCase();i.setSelectionRange(p,p)});s.replaceWith(i);i.focus()});
 function renderChips(c){
   const list=["Aktif","Lewat Target",...STATUSES,"Semua"];
   $("#chips").innerHTML=list.map(k=>`<button type="button" class="chip" data-f="${k}" aria-pressed="${k===filter}">${k==="Lewat Target"?"Lewat Deadline":k}<span class="n">${c[k]||0}</span></button>`).join("");
   const names=saNames(),cur=saQ.trim().toLowerCase();
   $("#saChips").innerHTML=names.map(n=>`<button type="button" class="chip" data-sa="${esc(n.name)}" aria-pressed="${n.name.toLowerCase()===cur}">${esc(n.name)}<span class="n">${n.act}${n.late?` · ${n.late} lewat`:""}</span></button>`).join("");
   $("#saList").innerHTML=names.map(n=>`<option value="${esc(n.name)}"></option>`).join("");
+  {const all=allSA(),sel=$("#sa");const curSel=all.find(n=>n.toLowerCase()===cur)||saQ.trim();
+   sel.innerHTML=`<option value="">Semua SA (${rows.filter(active).length} aktif)</option>`+all.map(n=>{const x=names.find(m=>m.name.toLowerCase()===n.toLowerCase());return `<option value="${esc(n)}">${esc(n)}${x?` — ${x.act} aktif${x.late?`, ${x.late} lewat`:""}`:""}</option>`}).join("");
+   sel.value=all.includes(curSel)?curSel:"";}
   $("#saClr").hidden=!saQ.trim();
 }
 function visible(){
@@ -609,7 +627,7 @@ function formHTML(r){
   <fieldset><legend>Info Servis</legend>
     <div class="grid2">
       <label class="req"><span>Tanggal</span><input id="f_tgl" type="date" value="${o(r.tgl)}" required></label>
-      <label class="req"><span>Service Advisor</span><input id="f_sa" list="saList" value="${o(r.sa)}" required></label>
+      <label class="req"><span>Service Advisor</span>${saSel("f_sa",r.sa)}</label>
       <label class="req"><span>Plat Nopol</span><input id="f_nopol" value="${o(r.nopol)}" required placeholder="B 1234 XYZ" style="text-transform:uppercase"></label>
       <label><span>Tipe kendaraan</span><input id="f_unit" value="${o(r.unit)}" placeholder="Avanza 2019"></label>
       <label class="req"><span>Pelanggan</span><input id="f_pel" value="${o(r.pelanggan)}" required></label>
@@ -762,7 +780,7 @@ function renderEst(){
     <label><span>Merk/Type</span><input id="e_unit" value="${o(h.unit)}" placeholder="FORTUNER"></label>
     <label><span>Tahun</span><input id="e_tahun" inputmode="numeric" value="${o(h.tahun)}"></label>
     <label><span>Tanggal</span><input id="e_tgl" type="date" value="${o(h.tgl)}"></label>
-    <label class="req"><span>Service Advisor</span><input id="e_sa" list="saList" value="${o(h.sa)}"></label>
+    <label class="req"><span>Service Advisor</span>${saSel("e_sa",h.sa)}</label>
     <label class="req"><span>Deadline ganti</span><input id="e_tgt" type="date" value="${o(h.target)}"></label>
     <label><span>Alasan belum diganti</span><select id="e_alasan">${["Pelanggan menunda","Part tidak tersedia (indent)","Budget pelanggan","Menunggu approval","Lainnya"].map(a=>`<option ${h.alasan===a?"selected":""}>${a}</option>`).join("")}</select></label>
    </div></fieldset>
@@ -869,7 +887,7 @@ function showImport(res){
   const ids=new Set(rows.map(r=>r.id));
   const def=addDays(today(),7);
   $("#impOut").innerHTML=`<div class="grid2"><label><span>Deadline ganti (semua kendaraan)</span><input id="iTgt" type="date" value="${def}"></label>
-     <label><span>Service Advisor (bila kosong di file)</span><input id="iSa" list="saList" value="${esc(saQ)}"></label></div>
+     <label><span>Service Advisor (bila kosong di file)</span>${saSel("iSa",saQ)}</label></div>
    ${res.map((v,i)=>{const ex=[...v.P,...v.J].filter(x=>ids.has(x.id)).length,tp=v.P.reduce((a,p)=>a+p.qty*p.harga,0),tj=v.J.reduce((a,j)=>a+j.total,0);
      return `<div class="impv"><label class="hd"><input type="checkbox" data-i="${i}" ${ex===v.P.length+v.J.length?"":"checked"}><span class="plate" style="font:700 14px var(--f-mono);background:#111;color:#fff;padding:4px 8px;border-radius:4px">${esc(v.h.nopol)}</span> ${esc(v.h.nama)}</label>
       <div class="small muted">${esc(v.h.unit)} ${esc(v.h.tahun)} · HP ${esc(v.h.hp)||"—"} · SA ${esc(v.h.sa)||"—"} · ${fmtD(v.h.tgl)}</div>
@@ -883,7 +901,7 @@ function showImport(res){
     const pick=[...$("#impOut").querySelectorAll(".impv input[type=checkbox]:checked")].map(x=>res[+x.dataset.i]);
     if(!pick.some(v=>!v.h.sa)||saDef){}else{err.textContent="Ada kendaraan tanpa nama SA di file — isi kolom Service Advisor.";err.hidden=false;return}
     const now=new Date().toISOString();let batch=[];
-    pick.forEach(v=>{const h={...v.h,sa:v.h.sa||saDef,target:tgt,tgl:v.h.tgl||today()};batch.push(...estDocs(h,v.P,v.J,now,"import Excel"))});
+    pick.forEach(v=>{const h={...v.h,sa:canonSA(v.h.sa)||saDef,target:tgt,tgl:v.h.tgl||today()};batch.push(...estDocs(h,v.P,v.J,now,"import Excel"))});
     const skip=batch.filter(x=>ids.has(x.id)).length;batch=batch.filter(x=>!ids.has(x.id));
     if(!batch.length){err.textContent="Semua data di file ini sudah ada di CR7.";err.hidden=false;return}
     const b=$("#iSave");b.disabled=true;b.textContent="Mengimpor…";openImport.busy=true;
@@ -901,7 +919,7 @@ function groupsOf(list){
     l.sort((a,b)=>(active(b)-active(a))||((a.jenis==="jasa")-(b.jenis==="jasa"))||String(a.createdAt||"").localeCompare(String(b.createdAt||""))||((+a.urut||0)-(+b.urut||0)));
     const act=l.filter(active),pick=f=>{const x=l.find(r=>r[f]);return x?x[f]:""};
     const tgt=act.map(r=>r.target).filter(Boolean).sort()[0]||"";
-    return {k,list:l,act,nopol:pick("nopol"),nama:pick("pelanggan"),hp:pick("kontak"),sa:pick("sa"),unit:pick("unit"),tgl:l.map(r=>r.tgl).filter(Boolean).sort()[0]||"",
+    return {k,list:l,act,nopol:pick("nopol"),nama:pick("pelanggan"),hp:pick("kontak"),sa:canonSA(pick("sa")),unit:pick("unit"),tgl:l.map(r=>r.tgl).filter(Boolean).sort()[0]||"",
       target:tgt,late:act.some(isLate),total:act.reduce((a,r)=>a+total(r),0),all:l.reduce((a,r)=>a+total(r),0)};
   });
   return G.sort((a,b)=>(b.late-a.late)||((b.act.length>0)-(a.act.length>0))||String(a.target||"9").localeCompare(String(b.target||"9")));
@@ -1051,7 +1069,7 @@ function renderReport(){
     $("#pie").innerHTML=`<svg viewBox="0 0 240 240" role="img" aria-label="Diagram bulat komposisi hasil follow up">${paths}${texts}</svg>
      <div class="plist">${CAT.map(x=>`<div><i class="sw" style="background:${x.c}"></i><span>${x.n}</span><span><b>${c[x.k]}</b> <span class="muted">· ${pctS(c[x.k],c.N)}</span></span></div>`).join("")}<div><span></span><span class="muted">Total</span><b>${c.N}</b></div></div>`}}
   // per SA
-  const g=new Map();list.forEach(r=>{const k=String(r.sa||"").trim()||"(tanpa SA)";if(!g.has(k))g.set(k,[]);g.get(k).push(r)});
+  const g=new Map();list.forEach(r=>{const k=canonSA(r.sa)||"(tanpa SA)";if(!g.has(k))g.set(k,[]);g.get(k).push(r)});
   const sas=[...g].map(([n,l])=>({n,c:tally(l)})).sort((a,b)=>b.c.N-a.c.N);
   const mx=Math.max(1,...sas.map(x=>x.c.N));
   $("#lg2").innerHTML=legendHTML();
@@ -1162,7 +1180,7 @@ async function readPhoto(){
     }
     const list=Array.isArray(res?.items)?res.items:[];
     if(!list.length){st.innerHTML=`<p class="err">Tidak ada sparepart yang terbaca di foto sparepart. Coba foto yang lebih jelas/terang.</p>`;b.disabled=false;return}
-    head={tgl:today(),sa:saQ||String(res.sa||""),nopol:normNopol(String(res.nopol||"")),unit:String(res.unit||""),pelanggan:String(res.pelanggan||""),kontak:normHp(res.hp),pic:"",target:"",alasan:"Pelanggan menunda",catatan:String(res.catatan||"")};
+    head={tgl:today(),sa:saQ||canonSA(String(res.sa||"")),nopol:normNopol(String(res.nopol||"")),unit:String(res.unit||""),pelanggan:String(res.pelanggan||""),kontak:normHp(res.hp),pic:"",target:"",alasan:"Pelanggan menunda",catatan:String(res.catatan||"")};
     items=list.map(x=>({id:newId(),on:true,partNo:String(x.partNo||""),partNama:String(x.partNama||""),qty:Math.max(1,Math.round(Number(x.qty)||1)),harga:Math.round(Number(x.harga)||0),jasa:Math.round(Number(x.jasa)||0),jasaKet:String(x.jasaKet||""),lokasi:String(x.lokasi||""),keterangan:String(x.keterangan||""),yakin:x.yakin!==false}));
     photoStep2();
   }catch(e){
@@ -1199,7 +1217,7 @@ function photoStep2(){
    </fieldset>
    <fieldset><legend>Berlaku untuk semua part di atas</legend>
     <div class="grid2">
-     <label class="req"><span>Service Advisor</span><input id="h_sa" list="saList" value="${o(head.sa)}"></label>
+     <label class="req"><span>Service Advisor</span>${saSel("h_sa",head.sa)}</label>
      <label class="req"><span>Plat Nopol</span><input id="h_nopol" value="${o(head.nopol)}" style="text-transform:uppercase"></label>
      <label><span>Tipe kendaraan</span><input id="h_unit" value="${o(head.unit)}"></label>
      <label class="req"><span>Pelanggan</span><input id="h_pel" value="${o(head.pelanggan)}"></label>
@@ -1359,7 +1377,7 @@ function newCustomer(seed){
     <label><span>Nomor HP</span><input id="n_hp" type="tel" inputmode="tel" placeholder="08…"></label>
     <label class="req"><span>Plat nomor</span><input id="n_nopol" value="${looksPlate?esc(seed):""}" placeholder="BK 1234 ABC" style="text-transform:uppercase"></label>
     <label><span>Merk / Tipe kendaraan</span><input id="n_unit" placeholder="Avanza 2019"></label>
-    <label class="req"><span>Service Advisor</span><input id="n_sa" list="saList" value="${esc(saQ)}"></label>
+    <label class="req"><span>Service Advisor</span>${saSel("n_sa",saQ)}</label>
     <label class="req"><span>Deadline ganti</span><input id="n_tgt" type="date" value="${addDays(today(),7)}"></label></div>
     <p class="err" id="n_err" hidden></p>`;
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="n_b">Batal</button><button class="btn primary" type="button" id="n_ok">Simpan &amp; lanjut</button>`;
@@ -1402,7 +1420,7 @@ function renderDetail(){
      ${Ja.length?`<div class="subtot"><span>Subtotal jasa</span><b>${rp(sumOf(Ja))}</b></div>`:""}</div>
    ${list.length?`<div class="card2"><div class="lbl">Riwayat CR7 · ${visits.length} kunjungan</div>
      ${visits.map(([t,vl],i)=>{const n=k=>vl.filter(r=>r.status===k).length,a=vl.filter(active).length,pp=vl.filter(r=>r.jenis!=="jasa").length,jj=vl.length-pp;
-       return `<details class="visit" ${i===0?"open":""}><summary><span><b>${t?fmtD(t):"Tanpa tanggal"}</b><small>${pp} part${jj?` · ${jj} jasa`:""}${vl[0].sa?` · SA ${esc(vl[0].sa)}`:""}</small></span>
+       return `<details class="visit" ${i===0?"open":""}><summary><span><b>${t?fmtD(t):"Tanpa tanggal"}</b><small>${pp} part${jj?` · ${jj} jasa`:""}${vl[0].sa?` · SA ${esc(canonSA(vl[0].sa))}`:""}</small></span>
          <span class="vs">${a?`<span class="pill s-Open">${a} aktif</span>`:""}${n("Selesai")?`<span class="pill s-Selesai">${n("Selesai")} diganti</span>`:""}${n("Batal")?`<span class="pill s-Batal">${n("Batal")} batal</span>`:""}<b>${rp(sumOf(vl))}</b></span></summary>
          ${vl.filter(r=>r.jenis!=="jasa").map(r=>li(r,"P")).join("")}${vl.filter(r=>r.jenis==="jasa").map(r=>li(r,"J")).join("")}</details>`}).join("")}</div>`:""}
    ${L.length?`<div class="card2"><div class="lbl">Riwayat follow up</div><div class="logl">${L.map(l=>`<div><small>${new Date(l.t).toLocaleString("id-ID",{dateStyle:"medium",timeStyle:"short"})} · ${esc(l.s)}</small>${esc(l.note)}</div>`).join("")}</div></div>`:""}
@@ -1452,7 +1470,7 @@ function addLines(kind,h){
 function editVeh(g){
   current=null;$("#dTitle").textContent="Ubah data pelanggan";
   $("#dBody").innerHTML=`<div class="grid2"><label><span>Nama</span><input id="v_nama" value="${esc(g.nama)}"></label><label><span>Nomor HP</span><input id="v_hp" type="tel" value="${esc(g.hp)}"></label>
-    <label><span>Merk / Tipe</span><input id="v_unit" value="${esc(g.unit)}"></label><label><span>Service Advisor</span><input id="v_sa" list="saList" value="${esc(g.sa)}"></label>
+    <label><span>Merk / Tipe</span><input id="v_unit" value="${esc(g.unit)}"></label><label><span>Service Advisor</span>${saSel("v_sa",g.sa)}</label>
     <label><span>Deadline ganti (part aktif)</span><input id="v_tgt" type="date" value="${esc(g.target)}"></label></div><p class="small muted" style="margin:0">Perubahan berlaku untuk semua baris kendaraan ${esc(g.nopol)}.</p><p class="err" id="v_err" hidden></p>`;
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="v_b">Batal</button><button class="btn primary" type="button" id="v_ok">Simpan</button>`;openDrawer();$("#v_b").onclick=closeDrawer;
   $("#v_ok").onclick=async()=>{const n={pelanggan:$("#v_nama").value.trim(),kontak:normHp($("#v_hp").value),unit:$("#v_unit").value.trim(),sa:$("#v_sa").value.trim()},tgt=$("#v_tgt").value,now=new Date().toISOString();
@@ -1501,7 +1519,7 @@ $("#rPer").value=rPer;$("#rPer").onchange=e=>{rPer=e.target.value;try{localStora
 $("#btnPhoto").onclick=()=>{photos={cust:null,part:null};photoStep1()};
 $("#chips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;filter=b.dataset.f;try{localStorage.setItem("cr7-filter",filter)}catch(_){}render()});
 $("#q").addEventListener("input",e=>{q=e.target.value;render()});
-$("#sa").addEventListener("input",e=>{saQ=e.target.value;try{localStorage.setItem("cr7-sa",saQ)}catch(_){}render()});
+$("#sa").addEventListener("change",e=>{saQ=e.target.value;try{localStorage.setItem("cr7-sa",saQ)}catch(_){}render()});
 $("#saChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;const n=b.dataset.sa;saQ=saQ.toLowerCase()===n.toLowerCase()?"":n;$("#sa").value=saQ;try{localStorage.setItem("cr7-sa",saQ)}catch(_){}render()});
 $("#saClr").onclick=()=>{saQ="";$("#sa").value="";try{localStorage.setItem("cr7-sa","")}catch(_){}render();$("#sa").focus()};
 $("#board").addEventListener("click",e=>{const p=e.target.closest(".prow");if(p)openDetail(p.dataset.id)});
