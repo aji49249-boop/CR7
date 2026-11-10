@@ -1473,6 +1473,16 @@ function editVeh(g){
     <label><span>Merk / Tipe</span><input id="v_unit" value="${esc(g.unit)}"></label><label><span>Service Advisor</span>${saSel("v_sa",g.sa)}</label>
     <label><span>Deadline ganti (part aktif)</span><input id="v_tgt" type="date" value="${esc(g.target)}"></label></div><p class="small muted" style="margin:0">Perubahan berlaku untuk semua baris kendaraan ${esc(g.nopol)}.</p><p class="err" id="v_err" hidden></p>`;
   $("#dFoot").innerHTML=`<button class="btn" type="button" id="v_b">Batal</button><button class="btn primary" type="button" id="v_ok">Simpan</button>`;openDrawer();$("#v_b").onclick=closeDrawer;
+  {const nv=new Set(g.list.map(r=>r.tgl||"")).size;
+   const box=document.createElement("div");box.className="card2";box.style.cssText="border-color:var(--late);margin-top:6px";
+   box.innerHTML=`<div class="lbl" style="color:var(--late)">Hapus pelanggan</div><p class="small muted" style="margin:0">Menghapus <b style="color:var(--ink)">${esc(g.nopol)}</b> beserta <b style="color:var(--ink)">${g.list.length} baris</b> CR7 (${nv} kunjungan) dari Google Sheet. Tidak bisa dibatalkan.</p>
+     <button type="button" class="btn" id="v_del" style="border-color:var(--late);color:var(--late);font-weight:600">Hapus pelanggan ini</button>`;
+   $("#dBody").appendChild(box);
+   $("#v_del").onclick=async()=>{const b=$("#v_del");
+     if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent=`Ya, hapus permanen ${g.nopol}`;b.style.background="var(--late)";b.style.color="#fff";return}
+     b.disabled=true;b.textContent="Menghapus…";
+     try{await deleteMany(g.list.map(r=>r.id));drafts.delete(g.k);closeDrawer();toast(`${g.nopol} dihapus`);history.replaceState({s:"cust"},"","#cust");go("cust",{push:false})}
+     catch(e){b.disabled=false;b.textContent="Coba lagi";$("#v_err").textContent="Gagal menghapus: "+(e.message||e.code||"");$("#v_err").hidden=false}}}
   $("#v_ok").onclick=async()=>{const n={pelanggan:$("#v_nama").value.trim(),kontak:normHp($("#v_hp").value),unit:$("#v_unit").value.trim(),sa:$("#v_sa").value.trim()},tgt=$("#v_tgt").value,now=new Date().toISOString();
     const b=$("#v_ok");b.disabled=true;b.textContent="Menyimpan…";
     try{await saveMany(g.list.map(r=>({id:r.id,data:{...r,...n,...(active(r)&&tgt?{target:tgt}:{}),updatedAt:now}})));closeDrawer();toast("Data diperbarui")}
@@ -1566,6 +1576,11 @@ col={
 };
 db=true;
 /* simpan banyak part sekaligus; id tetap sama saat "coba lagi" sehingga tidak dobel */
+async function deleteMany(ids){
+  try{await api("deleteMany",{ids})}
+  catch(e){if(!/action tidak dikenal/.test(e.message||""))throw e;for(const id of ids)await api("delete",{id})}
+  ids.forEach(id=>store.cache.delete(id));store.emit();
+}
 async function saveMany(batch){
   const data=batch.map(x=>({id:x.id,data:clean(x.data)}));
   try{await api("setMany",{items:data})}
